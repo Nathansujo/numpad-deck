@@ -165,3 +165,4 @@ Cobrem as regras de teclas (modo padrão/deck, `/`, `*`, `-`, repetição, Num L
 ## Arquivos
 
 `main.py` (entrada) · `posicao.py` (clique relativo à janela) · `navegador.py` (navegador do Deck) · `avisos.py` (pop-up, WhatsApp/Evolution, saída para o Bloco de Notas) · `instalar.bat`, `iniciar.bat`, `atualizar.bat`, `build.bat`, `build-no-linux.sh`, `gerar-exe-pelo-github.sh` · `nucleo.py` (regras das teclas) · `configuracao.py` (JSON, validação, imagens) · `servidor.py` + `web/index.html` (painel) · `hook_win.py`, `ui_tk.py` (pop-ups), `plataforma_win.py` (partes do Windows) · `teclas.py` (nomes das teclas)
+
