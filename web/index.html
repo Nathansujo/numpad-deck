@@ -1,0 +1,1142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Numpad Deck</title>
+<style>
+:root{--bg:#121214;--card:#202024;--card2:#29292e;--borda:#323238;--txt:#e1e1e6;--mudo:#a8a8b3;--verde:#04d361;--roxo:#8257e5;--verm:#e5484d}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:"Segoe UI",system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--borda)}
+h1{font-size:20px;margin:0 auto 0 0;color:var(--verde)}
+h2{font-size:17px;margin:0}
+.pill{padding:6px 14px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid var(--borda)}
+.pill.deck{background:#04d36122;border-color:var(--verde);color:var(--verde)}
+.pill.padrao{background:#8257e522;border-color:var(--roxo);color:#b9a2ff}
+.pill.off{background:#e5484d22;border-color:var(--verm);color:var(--verm)}
+.paginas{display:flex;align-items:center;gap:8px}
+.paginas #pag-num{min-width:120px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.paginas input{width:64px;background:var(--bg);border:1px solid var(--borda);border-radius:6px;padding:6px 8px}
+.btn{background:var(--roxo);border:0;border-radius:6px;padding:8px 14px;font-weight:600;color:#fff}
+.btn:hover{filter:brightness(1.12)}
+.btn.sec{background:var(--card2);border:1px solid var(--borda)}
+.btn.perigo{background:var(--verm)}
+.btn.ok{background:var(--verde);color:#04210f}
+.btn.mini{padding:3px 9px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+main{display:flex;flex-wrap:wrap;gap:24px;padding:24px 20px;max-width:1040px;margin:0 auto}
+#perfil{flex:1 1 520px}
+#perfil.flash{animation:flash 1.4s ease-out}
+@keyframes flash{0%{box-shadow:0 0 0 3px var(--verde)}100%{box-shadow:0 0 0 3px transparent}}
+#grade{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+.tecla{background:var(--card);border:1px solid var(--borda);border-radius:10px;padding:10px;text-align:left;display:flex;flex-direction:column;gap:6px}
+.tecla:hover{border-color:var(--roxo)}
+.tecla.zero{grid-column:span 2}
+.tecla .img{height:92px;border-radius:8px;background:var(--card2) center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;color:#4b4b55}
+.tecla .num{font-size:12px;color:var(--verde);font-weight:700}
+.tecla .nome{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tecla .desc{font-size:12px;color:var(--mudo);min-height:30px;overflow-wrap:anywhere}
+aside{flex:0 1 270px;background:var(--card);border:1px solid var(--borda);border-radius:10px;padding:16px;align-self:flex-start}
+aside ul{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:10px;font-size:14px}
+kbd{background:var(--card2);border:1px solid var(--borda);border-radius:4px;padding:1px 7px;font-weight:700;margin-right:6px}
+aside p{font-size:12px;color:var(--mudo);margin:14px 0 0}
+dialog{background:var(--card);color:var(--txt);border:1px solid var(--borda);border-radius:12px;padding:0;width:min(760px,96vw);max-height:94vh;overflow:auto}
+dialog::backdrop{background:#000a}
+.dlg{padding:20px;display:grid;gap:14px}
+.dlg label{display:grid;gap:6px;font-size:13px;color:var(--mudo)}
+.dlg *,.bloco-corpo *{min-width:0}
+.dlg input[type=text],.dlg input[type=number],.dlg input[type=password],.dlg select,.dlg textarea{background:var(--bg);border:1px solid var(--borda);border-radius:6px;padding:8px 10px;color:var(--txt);width:100%}
+.dlg textarea{min-height:70px;resize:vertical}
+.linha{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.linha > .cresce{flex:1}
+.previa{width:96px;height:96px;border-radius:8px;background:var(--card2) center/cover no-repeat;border:1px solid var(--borda);flex:none;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:700;color:#4b4b55}
+.valor{font-weight:700;overflow-wrap:anywhere}
+.dica{font-size:12px;color:var(--mudo)}
+#ed-msg{min-height:18px;font-size:13px;color:var(--verm)}
+#ed-msg.bom{color:var(--verde)}
+.rodape{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.dlg label.check,.check{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--txt)}
+.aviso{max-width:560px;margin:15vh auto;padding:24px;background:var(--card);border:1px solid var(--borda);border-radius:12px;text-align:center}
+
+/* fluxo de blocos */
+.fluxo-titulo{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.fluxo{display:grid;gap:0}
+.fluxo-vazio{padding:18px;border:1px dashed var(--borda);border-radius:10px;text-align:center;color:var(--mudo);font-size:14px}
+.bloco{background:var(--card2);border:1px solid var(--borda);border-radius:10px}
+.bloco.aberto{border-color:var(--roxo)}
+.bloco.arrastando{opacity:.4}
+.bloco.alvo{outline:2px dashed var(--verde)}
+.bloco-topo{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer}
+.alca{cursor:grab;color:var(--mudo);font-size:18px;line-height:1;user-select:none}
+.bloco-num{width:24px;height:24px;border-radius:50%;background:var(--roxo);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.bloco-icone{font-size:18px;flex:none}
+.bloco-titulo{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bloco-titulo.vazio{color:var(--mudo);font-weight:400}
+.bloco-ctl{display:flex;gap:4px}
+.bloco-corpo{padding:12px;display:grid;gap:12px;border-top:1px solid var(--borda)}
+.funcoes{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--card);border:1px solid var(--borda);border-radius:999px;padding:5px 11px;font-size:13px}
+.chip:hover{border-color:var(--roxo)}
+.chip.atual{background:var(--roxo);border-color:var(--roxo);color:#fff}
+.conector{height:26px;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--mudo);font-size:12px;position:relative}
+.conector::before{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:2px solid var(--borda)}
+.conector button{position:relative;z-index:1;background:var(--bg);border:1px solid var(--borda);border-radius:999px;width:22px;height:22px;line-height:1;padding:0;color:var(--mudo)}
+.conector button:hover{border-color:var(--verde);color:var(--verde)}
+.add{margin-top:8px;border:2px dashed var(--borda);background:transparent;border-radius:10px;padding:10px;font-weight:600;color:var(--mudo)}
+.add:hover{border-color:var(--verde);color:var(--verde)}
+.rapidas{display:flex;gap:6px;flex-wrap:wrap}
+.info-chamar{font-size:13px;color:var(--verde);min-height:18px}
+.grupo-tag{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--verde);margin:0 0 3px 4px}
+.bloco.erro-grupo{border-color:var(--verm)}
+.aviso-grupo{font-size:12px;color:var(--verm);padding:0 12px 8px}
+.cats{display:grid;gap:10px;margin-top:8px}
+details.trocar>summary{cursor:pointer;font-size:13px;color:var(--mudo)}
+details.trocar>summary:hover{color:var(--verde)}
+.cat-nome{font-size:11px;font-weight:700;color:var(--mudo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.cond{display:grid;gap:10px;padding:10px;border:1px solid var(--borda);border-radius:8px;background:var(--card)}
+.amostra{width:28px;height:28px;border-radius:6px;border:1px solid var(--borda);flex:none}
+.dica a,.dica code{color:var(--verde)}
+
+/* páginas */
+.pg-linha{display:grid;grid-template-columns:44px 1fr auto auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--borda);border-radius:8px;background:var(--card2)}
+.pg-linha.atual{border-color:var(--verde)}
+.pg-num{font-weight:700;color:var(--verde);text-align:center}
+.pg-linha input{background:var(--bg);border:1px solid var(--borda);border-radius:6px;padding:7px 9px;width:100%}
+#lista-paginas{display:grid;gap:8px}
+
+/* aviso: miniaturas da tela */
+.tamanhos{display:flex;gap:10px;flex-wrap:wrap}
+.tam{background:var(--card);border:2px solid var(--borda);border-radius:10px;padding:8px;display:grid;gap:6px;justify-items:center;font-size:13px}
+.tam:hover{border-color:var(--roxo)}
+.tam.atual{border-color:var(--verde)}
+.tela-mini{position:relative;width:132px;aspect-ratio:16/9;background:#0b0b0d;border:1px solid var(--borda);border-radius:6px;overflow:hidden}
+.tela-mini.grande{width:min(100%,340px)}
+.tela-mini .ret-aviso{position:absolute;background:var(--verde);opacity:.9;border-radius:2px}
+.evo-estado{font-size:13px}
+.evo-estado.bom{color:var(--verde)}
+.evo-estado.mau{color:var(--verm)}
+
+</style>
+</head>
+<body>
+<header>
+  <h1>Numpad Deck</h1>
+  <div id="modo" class="pill off">Conectando…</div>
+  <div class="paginas">
+    <button class="btn sec" id="pag-menos" title="Página anterior">◀</button>
+    <button class="btn sec" id="pag-num" title="Ver, nomear e criar páginas">Página 1</button>
+    <button class="btn sec" id="pag-mais" title="Próxima página">▶</button>
+    <input id="ir-pag" type="number" min="1" placeholder="nº" list="lista-numeros-pagina">
+    <button class="btn sec" id="ir-btn">Ir</button>
+    <button class="btn sec" id="pag-nova" title="Cria a próxima página e vai para ela">+ Nova</button>
+    <datalist id="lista-numeros-pagina"></datalist>
+  </div>
+  <button class="btn sec" id="ver-previa" title="Mostra no computador o pop-up que a tecla − abre">Ver prévia</button>
+  <button class="btn sec" id="abrir-opcoes">Opções</button>
+</header>
+
+<main>
+  <section id="perfil">
+    <h2 id="perfil-titulo">Perfil da página 1</h2>
+    <div class="dica">Clique numa tecla para montar o fluxo dela: nome, imagem e os blocos que serão executados.</div>
+    <div id="grade"></div>
+  </section>
+  <aside>
+    <h2>Atalhos do deck</h2>
+    <ul>
+      <li><kbd>Num Lock</kbd>troca entre modo padrão (luz acesa) e modo deck (luz apagada). Também cancela um fluxo em andamento</li>
+      <li><kbd>/</kbd>volta uma página</li>
+      <li><kbd>*</kbd>avança uma página</li>
+      <li><kbd>−</kbd>mostra a prévia grande da página (de novo, fecha)</li>
+    </ul>
+    <p>Esses atalhos só funcionam com a luz do Num Lock apagada (modo deck). No modo padrão a tecla continua normal e o computador apita para avisar que o deck não foi acionado.</p>
+  </aside>
+</main>
+
+<!-- Perfil / editor da tecla -->
+<dialog id="editor">
+  <div class="dlg">
+    <h2 id="ed-titulo">Tecla</h2>
+    <div class="linha">
+      <div class="previa" id="ed-previa"></div>
+      <div class="cresce" style="display:grid;gap:8px">
+        <label>Nome da tecla (aparece na prévia)<input id="ed-nome" type="text" maxlength="40" placeholder="Ex.: Abrir Google"></label>
+        <div class="linha">
+          <button class="btn sec" id="ed-img-btn" type="button">Escolher imagem…</button>
+          <button class="btn sec" id="ed-img-rm" type="button">Remover imagem</button>
+          <input id="ed-img-arq" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="fluxo-titulo"><h2>Fluxo</h2><span class="dica">Roda de cima para baixo. Clique num bloco para mudar a função.</span></div>
+      <div class="fluxo" id="fluxo"></div>
+      <button class="add btn" id="add-bloco" type="button" style="width:100%">+ Adicionar bloco</button>
+    </div>
+
+    <div id="ed-msg"></div>
+    <div class="rodape">
+      <button class="btn sec" id="ed-testar" type="button">▶ Testar fluxo</button>
+      <button class="btn perigo" id="ed-limpar" type="button">Limpar tecla</button>
+      <button class="btn sec" id="ed-fechar" type="button">Cancelar</button>
+      <button class="btn ok" id="ed-salvar" type="button">Salvar</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Páginas -->
+<dialog id="paginas">
+  <div class="dlg">
+    <h2>Páginas</h2>
+    <div class="dica">Dê um nome a cada página para se organizar (ex.: ECAC, Programas Python). “+ Nova página” cria o próximo número que ainda não existe. Como qualquer tecla pode chamar qualquer página, você pode ter quantas quiser.</div>
+    <div id="lista-paginas"></div>
+    <div id="pg-msg" style="min-height:18px;font-size:13px;color:var(--verm)"></div>
+    <div class="rodape">
+      <button class="btn ok" id="pg-nova" type="button">+ Nova página</button>
+      <button class="btn sec" id="pg-fechar" type="button">Fechar</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Opções -->
+<dialog id="opcoes">
+  <div class="dlg">
+    <h2>Opções</h2>
+    <div id="lista-opcoes" style="display:grid;gap:12px"></div>
+    <div id="evolution" class="cond"></div>
+    <div class="rodape">
+      <button class="btn perigo" id="encerrar" type="button">Encerrar o programa</button>
+      <button class="btn sec" id="op-fechar" type="button">Fechar</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const TOKEN = "__TOKEN__";
+const ORDEM = ["7","8","9","4","5","6","1","2","3","0"];
+const $ = (id) => document.getElementById(id);
+
+function el(tag, attrs, ...filhos){
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e[k] = v;
+    else e.setAttribute(k, v);
+  }
+  e.append(...filhos);
+  return e;
+}
+
+async function api(caminho, corpo){
+  const opc = {headers: {"X-Painel-Token": TOKEN}};
+  if (corpo !== undefined) {
+    opc.method = "POST";
+    if (corpo instanceof FormData) opc.body = corpo;
+    else { opc.headers["Content-Type"] = "application/json"; opc.body = JSON.stringify(corpo); }
+  }
+  const r = await fetch(caminho, opc);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.erro || ("Erro " + r.status));
+  return j;
+}
+
+/* ---------- uma única aba de painel ---------- */
+let ativo = true;
+const meuId = Math.random().toString(36).slice(2);
+try {
+  const canal = new BroadcastChannel("numpad-deck");
+  canal.onmessage = (e) => {
+    if (e.data && e.data.tipo === "nova" && e.data.id !== meuId) {
+      ativo = false;
+      document.body.replaceChildren(el("div", {class: "aviso"}, "O painel foi aberto em outra aba. Você pode fechar esta."));
+    }
+  };
+  canal.postMessage({tipo: "nova", id: meuId});
+} catch (_) {}
+
+/* ---------- estado ---------- */
+let cfg = null, versao = -1;
+
+function mostrarModo(e){
+  const p = $("modo");
+  if (!e) { p.className = "pill off"; p.textContent = "Programa não responde"; return; }
+  const deck = e.modo === "deck";
+  p.className = "pill " + (deck ? "deck" : "padrao");
+  p.textContent = deck ? "Modo deck · luz do Num Lock apagada" : "Modo padrão · luz do Num Lock acesa";
+}
+
+async function atualizar(){
+  try {
+    const e = await api("/api/estado");
+    mostrarModo(e);
+    if (e.versao !== versao) {
+      cfg = await api("/api/config");
+      versao = e.versao;
+      desenhar();
+    }
+  } catch (_) { mostrarModo(null); }
+}
+
+function desenhar(){
+  const rotuloPag = "Página " + cfg.pagina + (cfg.pagina_nome ? " · " + cfg.pagina_nome : "");
+  $("pag-num").textContent = rotuloPag;
+  $("perfil-titulo").textContent = "Perfil da " + rotuloPag.charAt(0).toLowerCase() + rotuloPag.slice(1);
+  $("lista-numeros-pagina").replaceChildren(...cfg.lista_paginas.map(p => el("option", {value: String(p.numero)}, p.nome || "")));
+  const foco = document.activeElement;
+  if ($("paginas").open && !(foco && foco.tagName === "INPUT" && $("lista-paginas").contains(foco))) desenharPaginas();   // não atrapalha quem está digitando um nome
+  const grade = $("grade");
+  grade.replaceChildren();
+  for (const t of ORDEM) {
+    const d = cfg.teclas[t];
+    const img = el("div", {class: "img"});
+    if (d.imagem) img.style.backgroundImage = 'url("/imagens/' + d.imagem + '")';
+    else img.textContent = t;
+    grade.append(el("button", {class: "tecla" + (t === "0" ? " zero" : ""), onclick: () => abrirEditor(t)},
+      img,
+      el("div", {class: "num"}, "Tecla " + t + (d.etapas > 1 ? " · " + d.etapas + " etapas" : "")),
+      el("div", {class: "nome"}, d.nome || "(sem nome)"),
+      el("div", {class: "desc"}, d.descricao)));
+  }
+  if (!$("lista-opcoes").dataset.pronto) montarOpcoes();
+}
+
+/* ---------- páginas ---------- */
+$("pag-menos").onclick = async () => { if (cfg.pagina > 1) { await api("/api/pagina", {delta: -1}); atualizar(); } };
+$("pag-mais").onclick = async () => { await api("/api/pagina", {delta: 1}); atualizar(); };
+$("ir-btn").onclick = async () => {
+  const n = parseInt($("ir-pag").value, 10);
+  if (n >= 1) { await api("/api/pagina", {ir_para: n}); $("ir-pag").value = ""; atualizar(); }
+};
+$("ver-previa").onclick = () => api("/api/previa", {}).catch(() => {});
+
+function nomePag(n){
+  const p = cfg && cfg.lista_paginas ? cfg.lista_paginas.find(x => x.numero === Number(n)) : null;
+  return p ? p.nome : "";
+}
+const rotuloPagina = (n) => "página " + n + (nomePag(n) ? " (" + nomePag(n) + ")" : "");
+
+function pgMsg(t){ $("pg-msg").textContent = t || ""; }
+function desenharPaginas(){
+  const caixa = $("lista-paginas");
+  caixa.replaceChildren();
+  for (const p of cfg.lista_paginas) {
+    const nome = el("input", {type: "text", maxlength: "30", placeholder: "Sem nome (clique e digite)", "aria-label": "Nome da página " + p.numero});
+    nome.value = p.nome;
+    nome.onchange = async () => {
+      try { await api("/api/pagina", {renomear: {pagina: p.numero, nome: nome.value}}); pgMsg(""); atualizar(); }
+      catch (e) { pgMsg(e.message); nome.value = p.nome; }
+    };
+    const ir = el("button", {class: "btn sec mini", type: "button", onclick: async () => { await api("/api/pagina", {ir_para: p.numero}); atualizar(); }}, p.numero === cfg.pagina ? "Atual" : "Ir");
+    ir.disabled = p.numero === cfg.pagina;
+    const rm = el("button", {class: "btn sec mini", type: "button", title: "Remover da lista (só páginas sem teclas)", onclick: async () => {
+      try { await api("/api/pagina", {remover: p.numero}); pgMsg(""); atualizar(); } catch (e) { pgMsg(e.message); }
+    }}, "✕");
+    rm.disabled = p.numero === 1 || p.numero === cfg.pagina;
+    caixa.append(el("div", {class: "pg-linha" + (p.numero === cfg.pagina ? " atual" : "")},
+      el("span", {class: "pg-num"}, String(p.numero)), nome,
+      el("span", {class: "dica"}, p.teclas ? p.teclas + " tecla(s)" : "vazia"), el("span", {class: "linha"}, ir, rm)));
+  }
+}
+async function novaPagina(){
+  try { await api("/api/pagina", {nova: true}); await atualizar(); if ($("paginas").open) { desenharPaginas(); const nomes = $("lista-paginas").querySelectorAll("input"); nomes[nomes.length - 1].focus(); } }
+  catch (e) { pgMsg(e.message); }
+}
+$("pag-num").onclick = () => { pgMsg(""); desenharPaginas(); $("paginas").showModal(); };
+$("pag-nova").onclick = novaPagina;
+$("pg-nova").onclick = novaPagina;
+$("pg-fechar").onclick = () => $("paginas").close();
+
+/* ---------- blocos: definição das funções ---------- */
+const FUNCOES = {
+  atalho:        {icone: "⌨️", nome: "Atalho de teclado"},
+  texto:         {icone: "🔤", nome: "Digitar texto"},
+  colar:         {icone: "📋", nome: "Colar texto"},
+  clique:        {icone: "🖱️", nome: "Clique"},
+  mover:         {icone: "🎯", nome: "Mover mouse"},
+  rolagem:       {icone: "↕️", nome: "Rolar a tela"},
+  pausa:         {icone: "⏱️", nome: "Esperar"},
+  repetir:       {icone: "🔁", nome: "Repetir"},
+  se:            {icone: "🔀", nome: "Se / senão"},
+  variavel:      {icone: "🔢", nome: "Contador / variável"},
+  chamar:        {icone: "🔗", nome: "Chamar outra tecla"},
+  ir_pagina:     {icone: "📄", nome: "Ir para página"},
+  abrir:         {icone: "🚀", nome: "Abrir programa ou pasta"},
+  site:          {icone: "🌐", nome: "Abrir site"},
+  comando:       {icone: "💻", nome: "Comando (PowerShell/CMD)"},
+  whatsapp:      {icone: "💬", nome: "WhatsApp (abrir conversa)"},
+  web_clicar:    {icone: "👆", nome: "Clicar na página web"},
+  web_preencher: {icone: "✏️", nome: "Preencher campo da página"},
+  midia:         {icone: "🔊", nome: "Volume e mídia"},
+  captura:       {icone: "📸", nome: "Print da tela"},
+  sistema:       {icone: "🔒", nome: "Bloquear PC / monitor"},
+  aviso:         {icone: "🔔", nome: "Aviso (pop-up, WhatsApp, Bloco de Notas)"},
+};
+const CATEGORIAS = [
+  ["Teclado e mouse", ["atalho", "texto", "colar", "clique", "mover", "rolagem"]],
+  ["Esperar e controlar o fluxo", ["pausa", "repetir", "se", "variavel", "chamar", "ir_pagina"]],
+  ["Programas, sites e página web", ["abrir", "site", "comando", "whatsapp", "web_clicar", "web_preencher"]],
+  ["Sistema", ["midia", "captura", "sistema", "aviso"]],
+];
+const CONDICAO_PADRAO = {
+  janela: () => ({tipo: "janela", modo: "ativa", texto: ""}),
+  pixel:  () => ({tipo: "pixel", x: 0, y: 0, cor: "#000000", tolerancia: 24}),
+  pagina: () => ({tipo: "pagina", alvo: "seletor", valor: "", aba: ""}),
+};
+const PADRAO = {
+  atalho: () => ({teclas: []}), texto: () => ({texto: ""}), colar: () => ({texto: ""}),
+  clique: () => ({alvo: "tela", x: 0, y: 0, botao: "esquerdo", duplo: false}), mover: () => ({alvo: "tela", x: 0, y: 0}),
+  rolagem: () => ({direcao: "baixo", quantidade: 3}), pausa: () => ({modo: "tempo", segundos: 1}),
+  repetir: () => ({vezes: 2, blocos: 1}),
+  se: () => ({condicao: CONDICAO_PADRAO.janela(), negar: false, entao: 1, senao: 0}),
+  variavel: () => ({nome: "contador", operacao: "somar", valor: 1}),
+  abrir: () => ({caminho: "", argumentos: ""}), site: () => ({url: "", controlado: false}),
+  comando: () => ({shell: "powershell", comando: "", esperar: false}),
+  whatsapp: () => ({numero: "", mensagem: "", controlado: false}),
+  web_clicar: () => ({seletor: "", aba: "", limite: 10}),
+  web_preencher: () => ({seletor: "", texto: "", aba: "", limite: 10}),
+  midia: () => ({acao: "volume_mais", vezes: 1}), captura: () => ({tela: "todas"}), sistema: () => ({acao: "bloquear"}),
+  chamar: () => ({pagina: Math.max(1, cfg ? cfg.pagina : 1), tecla: "1"}),
+  ir_pagina: () => ({numero: 1}), aviso: () => AVISO_PADRAO.popup(),
+};
+const AVISO_PADRAO = {
+  popup: () => ({canal: "popup", titulo: "", texto: "", tamanho: "medio", posicao: "baixo_dir", segundos: 5}),
+  whatsapp: () => ({canal: "whatsapp", modo: "link", numero: "", texto: "", espera: 10}),
+  bloco_notas: () => ({canal: "bloco_notas", origem: "arquivo", arquivo: "", pasta: "", shell: "python", comando: "", limite: 120}),
+};
+const TAMANHOS_AVISO = {pequeno: [0.20, 0.10, "Pequeno"], medio: [0.30, 0.17, "Médio"], grande: [0.46, 0.32, "Grande"]};
+const POSICOES_AVISO = {centro: "Centro", topo: "Topo", baixo: "Embaixo", topo_esq: "Canto superior esquerdo", topo_dir: "Canto superior direito",
+                        baixo_esq: "Canto inferior esquerdo", baixo_dir: "Canto inferior direito", personalizado: "Personalizado (desenhar na tela)"};
+const MIDIA = {volume_mais: "Volume +", volume_menos: "Volume −", mudo: "Mudo / som", play_pausa: "Play / Pausa", proxima: "Próxima faixa", anterior: "Faixa anterior"};
+const SISTEMA = {bloquear: "Bloquear o computador", monitor_off: "Desligar o monitor"};
+
+function resumoCondicao(c){
+  if (c.tipo === "janela") return c.modo === "ativa" ? 'janela ativa com "' + c.texto + '"' : 'janela "' + c.texto + '" aberta';
+  if (c.tipo === "pixel") return "cor " + c.cor + " em (" + c.x + ", " + c.y + ")";
+  return c.alvo === "seletor" ? "elemento " + c.valor + " na página" : 'texto "' + c.valor + '" na página';
+}
+const curto = (t, n) => { t = String(t).replace(/\n/g, " "); return t.length > n ? t.slice(0, n) + "…" : t; };
+
+const pct = (v) => (Math.round(v * 1000) / 10).toString().replace(".", ",") + "%";
+const CANTOS = {topo_esq: "superior esquerdo", topo_dir: "superior direito", baixo_esq: "inferior esquerdo", baixo_dir: "inferior direito"};
+function resumoOnde(b){
+  if (b.alvo !== "janela") return "em (" + b.x + ", " + b.y + ")";
+  const j = 'da janela "' + curto(b.janela || "?", 24) + '"';
+  if (!b.janela) return "na janela de um programa · marque o ponto";
+  return b.ancora === "proporcional" ? "em (" + pct(b.rx) + ", " + pct(b.ry) + ") " + j : "a (" + b.dx + ", " + b.dy + ") px do canto " + CANTOS[b.ancora] + " " + j;
+}
+
+function resumo(b){
+  switch (b.tipo) {
+    case "atalho": return b.teclas.length ? "Atalho: " + b.teclas.map(t => t.nome).join(" + ") : "Atalho · grave o comando";
+    case "texto": return b.texto ? 'Digitar: "' + curto(b.texto, 40) + '"' : "Digitar texto · escreva o texto";
+    case "colar": return b.texto ? 'Colar: "' + curto(b.texto, 40) + '"' : "Colar texto · escreva o texto";
+    case "clique": return (b.duplo ? "Duplo clique " : "Clique ") + ({esquerdo: "esquerdo", direito: "direito", meio: "do meio"}[b.botao]) + " " + resumoOnde(b);
+    case "mover": return "Mover o mouse para " + resumoOnde(b);
+    case "rolagem": return "Rolar para " + b.direcao + " (" + b.quantidade + "x)";
+    case "pausa":
+      if (b.modo === "tempo") return "Esperar " + String(b.segundos).replace(".", ",") + " s";
+      return "Esperar " + b.ate + ": " + resumoCondicao(b.condicao);
+    case "repetir": return "Repetir " + b.vezes + "x os próximos " + b.blocos + " bloco(s)";
+    case "se": return "Se " + (b.negar ? "NÃO " : "") + resumoCondicao(b.condicao) + " → " + b.entao + " bloco(s)" + (b.senao ? ", senão " + b.senao : "");
+    case "variavel": return b.operacao === "zerar" ? "Zerar {" + b.nome + "}" : (b.operacao === "somar" ? "Somar " + b.valor + " a" : "Definir") + " {" + b.nome + "}" + (b.operacao === "definir" ? " = " + b.valor : "");
+    case "abrir": return b.caminho ? "Abrir: " + b.caminho.split(/[\\/]/).filter(Boolean).pop() + (b.argumentos ? " " + b.argumentos : "") : "Abrir programa · escolha o arquivo ou pasta";
+    case "site": return b.url ? "Abrir site: " + b.url.replace(/^https?:\/\//, "") + (b.controlado ? " (navegador do Deck)" : "") : "Abrir site · escreva o endereço";
+    case "comando": return b.comando ? (b.shell === "cmd" ? "CMD: " : "PowerShell: ") + curto(b.comando, 40) : "Comando · escreva o comando";
+    case "whatsapp": return "WhatsApp" + (b.numero ? " para " + b.numero : "") + (b.mensagem ? ': "' + curto(b.mensagem, 24) + '"' : "");
+    case "web_clicar": return b.seletor ? "Clicar na página: " + b.seletor : "Clicar na página · informe o seletor";
+    case "web_preencher": return b.seletor ? "Preencher na página: " + b.seletor : "Preencher na página · informe o seletor";
+    case "midia": return MIDIA[b.acao] + (b.vezes > 1 ? " (" + b.vezes + "x)" : "");
+    case "captura": return "Print da tela" + (b.tela === "principal" ? " principal" : "");
+    case "sistema": return SISTEMA[b.acao];
+    case "chamar": return "Chamar a tecla " + b.tecla + " da " + rotuloPagina(b.pagina);
+    case "ir_pagina": return "Ir para a " + rotuloPagina(b.numero);
+    case "aviso":
+      if (b.canal === "whatsapp") return b.numero || b.texto ? "Avisar no WhatsApp" + (b.numero ? " (" + b.numero + ")" : "") + (b.texto ? ': "' + curto(b.texto, 30) + '"' : "") : "Aviso no WhatsApp · informe número e mensagem";
+      if (b.canal === "bloco_notas") {
+        if (b.origem === "saida") return b.comando ? "Bloco de Notas com a saída de: " + curto(b.comando.split(/[\\/]/).filter(Boolean).pop(), 36) : "Bloco de Notas · informe o comando ou script";
+        return b.arquivo ? "Bloco de Notas: " + b.arquivo.split(/[\\/]/).filter(Boolean).pop() : "Bloco de Notas · informe o arquivo";
+      }
+      return b.texto ? "Aviso" + (b.tamanho ? " " + TAMANHOS_AVISO[b.tamanho][2].toLowerCase() : "") + ': "' + curto(b.texto, 36) + '"' : "Aviso · escreva a mensagem";
+    default: return "Novo bloco · clique e escolha a função";
+  }
+}
+
+/* ---------- editor da tecla ---------- */
+let r = null;            // rascunho da tecla em edição
+let proximoId = 1;
+let arrastando = null;   // índice do bloco que está sendo arrastado
+
+function msg(texto, bom){ const m = $("ed-msg"); m.textContent = texto || ""; m.className = bom ? "bom" : ""; }
+
+function abrirEditor(tecla){
+  const d = cfg.teclas[tecla];
+  r = {pagina: cfg.pagina, tecla, nome: d.nome, imagem: d.imagem,
+       fluxo: d.fluxo.map(b => { const c = JSON.parse(JSON.stringify(b)); delete c.descricao; c._id = proximoId++; c._aberto = false; return c; })};
+  $("ed-titulo").textContent = "Perfil da tecla " + tecla + " · Página " + r.pagina;
+  $("ed-nome").value = r.nome;
+  msg("");
+  pintarPrevia();
+  desenharFluxo();
+  $("editor").showModal();
+}
+
+function pintarPrevia(){
+  const previa = $("ed-previa");
+  previa.style.backgroundImage = r.imagem ? 'url("/imagens/' + r.imagem + '")' : "none";
+  previa.textContent = r.imagem ? "" : r.tecla;
+}
+
+function limpo(b){   // tira os campos só da tela
+  const c = {}; for (const [k, v] of Object.entries(b)) if (!k.startsWith("_")) c[k] = v; return c;
+}
+function fluxoLimpo(){ return r.fluxo.map(limpo); }
+
+/* grupos: "Repetir" e "Se" valem para os blocos logo abaixo deles */
+function faixas(){
+  const out = [];
+  r.fluxo.forEach((b, i) => {
+    if (b.tipo === "repetir") out.push({b, campo: "blocos", ini: i + 1, fim: i + (b.blocos || 0), min: 1});
+    else if (b.tipo === "se") {
+      out.push({b, campo: "entao", ini: i + 1, fim: i + (b.entao || 0), min: 1});
+      if (b.senao > 0) out.push({b, campo: "senao", ini: i + (b.entao || 0) + 1, fim: i + (b.entao || 0) + b.senao, min: 0});
+    }
+  });
+  return out;
+}
+
+function estrutura(){
+  const n = r.fluxo.length, prof = Array(n).fill(0), tag = Array(n).fill(""), erro = Array(n).fill("");
+  r.fluxo.forEach((b, i) => {
+    let a = 0, c = 0;
+    if (b.tipo === "repetir") a = b.blocos || 0;
+    else if (b.tipo === "se") { a = b.entao || 0; c = b.senao || 0; }
+    if (!a && !c) return;
+    if (i + a + c >= n) erro[i] = "O grupo passa do fim do fluxo: diminua a quantidade ou adicione blocos depois.";
+    for (let j = i + 1; j <= Math.min(n - 1, i + a + c); j++) prof[j]++;
+    const marca = (j, texto) => { if (j < n) tag[j] = (tag[j] ? tag[j] + " · " : "") + texto; };
+    if (b.tipo === "repetir") marca(i + 1, "repete " + b.vezes + "x");
+    else { marca(i + 1, "então"); if (c) marca(i + a + 1, "senão"); }
+  });
+  return {prof, tag, erro};
+}
+
+function novoBloco(pos){
+  const lugar = pos === undefined ? r.fluxo.length : pos;
+  for (const f of faixas()) if (lugar >= f.ini && lugar <= Math.min(f.fim, r.fluxo.length - 1)) f.b[f.campo]++;   // inserir no meio de um grupo aumenta o grupo (no fim do fluxo, só preenche)
+  const b = {_id: proximoId++, _aberto: true, tipo: null};
+  r.fluxo.forEach(x => x._aberto = false);
+  r.fluxo.splice(lugar, 0, b);
+  desenharFluxo();
+}
+
+function removerBloco(i){
+  for (const f of faixas()) if (i >= f.ini && i <= f.fim) f.b[f.campo] = Math.max(f.min, f.b[f.campo] - 1);
+  r.fluxo.splice(i, 1);
+  desenharFluxo();
+}
+
+function trocarFuncao(b, tipo){
+  const id = b._id, aberto = b._aberto;
+  for (const k of Object.keys(b)) delete b[k];
+  Object.assign(b, {_id: id, _aberto: aberto, tipo}, PADRAO[tipo]());
+  desenharFluxo();
+}
+
+function desenharFluxo(){
+  const caixa = $("fluxo");
+  caixa.replaceChildren();
+  if (!r.fluxo.length) caixa.append(el("div", {class: "fluxo-vazio"}, "Nenhum bloco ainda. Clique em “+ Adicionar bloco”."));
+  const est = estrutura();
+  r.fluxo.forEach((b, i) => {
+    const recuo = "margin-left:" + (est.prof[i] * 22) + "px";
+    if (i > 0) caixa.append(el("div", {class: "conector", style: recuo}, el("button", {type: "button", title: "Inserir um bloco aqui", onclick: () => novoBloco(i)}, "+")));
+    if (est.tag[i]) caixa.append(el("div", {class: "grupo-tag", style: recuo}, "↳ " + est.tag[i]));
+    const card = cartao(b, i, est.erro[i]);
+    card.style.marginLeft = (est.prof[i] * 22) + "px";
+    caixa.append(card);
+  });
+}
+
+function cartao(b, i, erroGrupo){
+  const f = FUNCOES[b.tipo] || {icone: "➕", nome: ""};
+  const titulo = el("div", {class: "bloco-titulo" + (b.tipo ? "" : " vazio")}, resumo(b));
+  const alca = el("span", {class: "alca", title: "Arraste para mudar a ordem"}, "⠿");
+  alca.draggable = true;
+  const ctl = el("div", {class: "bloco-ctl"},
+    el("button", {class: "btn sec mini", type: "button", title: "Testar só este bloco", onclick: (ev) => { ev.stopPropagation(); testar([limpo(b)]); }}, "▶"),
+    el("button", {class: "btn sec mini", type: "button", title: "Subir", onclick: (ev) => { ev.stopPropagation(); mover(i, -1); }}, "↑"),
+    el("button", {class: "btn sec mini", type: "button", title: "Descer", onclick: (ev) => { ev.stopPropagation(); mover(i, 1); }}, "↓"),
+    el("button", {class: "btn sec mini", type: "button", title: "Remover", onclick: (ev) => { ev.stopPropagation(); removerBloco(i); }}, "✕"));
+  const topo = el("div", {class: "bloco-topo", onclick: () => { b._aberto = !b._aberto; desenharFluxo(); }},
+    alca, el("span", {class: "bloco-num"}, String(i + 1)), el("span", {class: "bloco-icone"}, f.icone), titulo, ctl);
+  const card = el("div", {class: "bloco" + (b._aberto ? " aberto" : "") + (erroGrupo ? " erro-grupo" : ""), "data-indice": String(i)}, topo);
+  if (erroGrupo) card.append(el("div", {class: "aviso-grupo"}, "⚠ " + erroGrupo));
+  if (b._aberto) card.append(corpo(b, titulo));
+
+  alca.onclick = (ev) => ev.stopPropagation();
+  alca.ondragstart = (ev) => {
+    arrastando = i; ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", String(i));
+    try { ev.dataTransfer.setDragImage(card, 20, 20); } catch (_) {}
+    card.classList.add("arrastando");
+  };
+  alca.ondragend = () => { arrastando = null; desenharFluxo(); };
+  card.ondragover = (ev) => { if (arrastando !== null) { ev.preventDefault(); card.classList.add("alvo"); } };
+  card.ondragleave = () => card.classList.remove("alvo");
+  card.ondrop = (ev) => {
+    ev.preventDefault();
+    if (arrastando === null || arrastando === i) return;
+    const [movido] = r.fluxo.splice(arrastando, 1);
+    r.fluxo.splice(i, 0, movido);
+    arrastando = null; desenharFluxo();
+  };
+  return card;
+}
+
+function mover(i, d){
+  const j = i + d;
+  if (j < 0 || j >= r.fluxo.length) return;
+  [r.fluxo[i], r.fluxo[j]] = [r.fluxo[j], r.fluxo[i]];
+  desenharFluxo();
+}
+
+function campo(rotulo, entrada){ return el("label", {}, rotulo, entrada); }
+function numero(valor, aoMudar, extra){
+  const e = el("input", Object.assign({type: "number"}, extra || {}));
+  e.value = valor;
+  e.oninput = () => aoMudar(e.value === "" ? NaN : Number(e.value));
+  return e;
+}
+function numeroEstrutural(valor, aoMudar, extra){   // muda o recuo dos blocos: só aplica ao sair do campo
+  const e = el("input", Object.assign({type: "number"}, extra || {}));
+  e.value = valor;
+  e.onchange = () => { aoMudar(e.value === "" ? NaN : Number(e.value)); desenharFluxo(); };
+  return e;
+}
+function opcoesSelect(pares, atual, aoMudar){
+  const sel = el("select", {}, ...pares.map(([v, t]) => el("option", {value: v}, t)));
+  sel.value = atual; sel.onchange = () => aoMudar(sel.value);
+  return sel;
+}
+function texto1(valor, aoMudar, attrs){
+  const e = el("input", Object.assign({type: "text"}, attrs || {}));
+  e.value = valor; e.oninput = () => aoMudar(e.value);
+  return e;
+}
+function marcaCaixa(rotulo, valor, aoMudar, estrutural){
+  const cx = el("input", {type: "checkbox"}); cx.checked = !!valor;
+  cx.onchange = () => { aoMudar(cx.checked); if (estrutural) desenharFluxo(); };
+  return el("label", {class: "check"}, cx, rotulo);
+}
+
+const AJUDA_SELETOR = "Como achar o seletor: na página, clique com o botão direito no elemento → Inspecionar → no HTML que destacou, botão direito → Copy → Copy selector. Exemplos: #enviar · button.ok · [data-testid='send']";
+
+/* editor de condição (usado por "Esperar" e por "Se") */
+function editorCondicao(c, atualizarTitulo){
+  const caixa = el("div", {class: "cond"});
+  const tipo = opcoesSelect([["janela", "Uma janela do Windows"], ["pixel", "A cor de um ponto da tela"], ["pagina", "Algo na página web (navegador do Deck)"]], c.tipo, (v) => {
+    for (const k of Object.keys(c)) delete c[k];
+    Object.assign(c, CONDICAO_PADRAO[v]()); desenharFluxo();
+  });
+  caixa.append(campo("Observar", tipo));
+  if (c.tipo === "janela") {
+    caixa.append(
+      campo("Parte do título da janela", texto1(c.texto, v => { c.texto = v; atualizarTitulo(); }, {placeholder: "Ex.: Excel, Bloco de Notas, Google Chrome"})),
+      campo("Considerar", opcoesSelect([["ativa", "a janela que está em primeiro plano"], ["existe", "qualquer janela aberta"]], c.modo, v => { c.modo = v; atualizarTitulo(); })));
+  } else if (c.tipo === "pixel") {
+    const amostra = el("span", {class: "amostra"}); amostra.style.background = c.cor;
+    const marcar = el("button", {class: "btn", type: "button"}, "◎ Marcar ponto e cor na tela");
+    marcar.onclick = async () => {
+      marcar.disabled = true; msg("");
+      try { const res = await api("/api/capturar-cor", {}); c.x = res.x; c.y = res.y; c.cor = res.cor; msg("Cor " + res.cor + " em (" + res.x + ", " + res.y + ")", true); }
+      catch (e) { msg(e.message); }
+      desenharFluxo();
+    };
+    const cor = el("input", {type: "color"}); cor.value = c.cor; cor.oninput = () => { c.cor = cor.value; amostra.style.background = c.cor; atualizarTitulo(); };
+    caixa.append(el("div", {class: "linha"}, marcar, amostra, el("span", {class: "valor"}, c.cor + " em (" + c.x + ", " + c.y + ")")),
+      el("div", {class: "linha"},
+        el("div", {class: "cresce"}, campo("X", numero(c.x, v => { c.x = v; atualizarTitulo(); }))),
+        el("div", {class: "cresce"}, campo("Y", numero(c.y, v => { c.y = v; atualizarTitulo(); }))),
+        el("div", {class: "cresce"}, campo("Cor", cor)),
+        el("div", {class: "cresce"}, campo("Tolerância (0 a 255)", numero(c.tolerancia, v => { c.tolerancia = v; }, {min: "0", max: "255"})))),
+      el("div", {class: "dica"}, "Boa para botões que mudam de cor (cinza → verde) ou telas de carregamento. Quanto maior a tolerância, mais parecida a cor pode ser."));
+  } else {
+    caixa.append(
+      el("div", {class: "linha"},
+        el("div", {class: "cresce"}, campo("Procurar", opcoesSelect([["seletor", "um elemento do HTML (seletor CSS)"], ["texto", "um texto na página"]], c.alvo, v => { c.alvo = v; desenharFluxo(); }))),
+        el("div", {class: "cresce"}, campo("Só na aba cujo endereço/título contém (opcional)", texto1(c.aba, v => { c.aba = v; }, {placeholder: "Ex.: whatsapp"})))),
+      campo(c.alvo === "seletor" ? "Seletor do elemento" : "Texto a procurar", texto1(c.valor, v => { c.valor = v; atualizarTitulo(); }, {placeholder: c.alvo === "seletor" ? "#enviar  ·  button.ok  ·  [aria-label='Enviar']" : "Mensagem enviada"})),
+      el("div", {class: "dica"}, "Vale para páginas abertas no navegador do Deck: use o bloco “Abrir site” marcando “no navegador do Deck”. " + (c.alvo === "seletor" ? AJUDA_SELETOR : "")));
+  }
+  return caixa;
+}
+
+function corpo(b, titulo){
+  const atualizarTitulo = () => { titulo.textContent = resumo(b); titulo.classList.toggle("vazio", !b.tipo); };
+  const caixa = el("div", {class: "bloco-corpo"});
+  const cats = el("div", {class: "cats"});
+  for (const [nomeCat, tipos] of CATEGORIAS) {
+    const chips = el("div", {class: "funcoes"});
+    for (const tipo of tipos) {
+      const f = FUNCOES[tipo];
+      chips.append(el("button", {type: "button", class: "chip" + (b.tipo === tipo ? " atual" : ""), onclick: () => { if (b.tipo !== tipo) trocarFuncao(b, tipo); }}, f.icone + " " + f.nome));
+    }
+    cats.append(el("div", {}, el("div", {class: "cat-nome"}, nomeCat), chips));
+  }
+  const detalhes = el("details", {class: "trocar"}, el("summary", {}, b.tipo ? "Função: " + FUNCOES[b.tipo].nome + " · clique aqui para trocar" : "Escolha a função do bloco:"), cats);
+  if (!b.tipo) detalhes.open = true;   // bloco novo: já mostra as funções
+  caixa.append(detalhes);
+
+  const t = b.tipo;
+  if (t === "atalho") {
+    const valor = el("span", {class: "valor"}, b.teclas.length ? b.teclas.map(x => x.nome).join(" + ") : "—");
+    const gravar = el("button", {class: "btn", type: "button"}, "● Gravar comando");
+    const dica = el("div", {class: "dica"}, "Clique em gravar e faça o comando no teclado (ex.: Ctrl + V). Termina quando você soltar tudo.");
+    gravar.onclick = async () => {
+      gravar.disabled = true; dica.textContent = "Faça o comando agora e solte as teclas…"; msg("");
+      try { const res = await api("/api/gravar-macro", {}); b.teclas = res.teclas; msg("Gravado: " + res.descricao, true); }
+      catch (e) { msg(e.message); }
+      desenharFluxo();
+    };
+    const cancelar = el("button", {class: "btn sec", type: "button", onclick: () => api("/api/cancelar", {})}, "Cancelar gravação");
+    caixa.append(el("div", {}, "Comando: ", valor), el("div", {class: "linha"}, gravar, cancelar), dica);
+  } else if (t === "texto" || t === "colar") {
+    const area = el("textarea", {maxlength: t === "texto" ? "2000" : "5000", placeholder: "Pode usar {contador}, {data} e {hora}"});
+    area.value = b.texto; area.oninput = () => { b.texto = area.value; atualizarTitulo(); };
+    caixa.append(campo(t === "texto" ? "Texto a digitar (tecla por tecla)" : "Texto a colar (vai para a área de transferência e aperta Ctrl + V)", area),
+      el("div", {class: "dica"}, t === "texto" ? "Para textos longos, com acentos ou emojis, prefira “Colar texto”: é instantâneo e não erra caracteres." : "A área de transferência fica com esse texto depois."));
+  } else if (t === "clique" || t === "mover") {
+    corpoPosicao(b, t, caixa, atualizarTitulo);
+  } else if (t === "rolagem") {
+    caixa.append(el("div", {class: "linha"},
+      el("div", {class: "cresce"}, campo("Direção", opcoesSelect([["baixo", "Para baixo"], ["cima", "Para cima"]], b.direcao, v => { b.direcao = v; atualizarTitulo(); }))),
+      el("div", {class: "cresce"}, campo("Quantidade (1 a 50)", numero(b.quantidade, v => { b.quantidade = v; atualizarTitulo(); }, {min: "1", max: "50"})))));
+  } else if (t === "pausa") {
+    caixa.append(campo("Esperar…", opcoesSelect([["tempo", "um tempo"], ["condicao", "até uma condição (janela, cor na tela ou algo na página web)"]], b.modo, (v) => {
+      const id = b._id, ab = b._aberto;
+      for (const k of Object.keys(b)) delete b[k];
+      Object.assign(b, {_id: id, _aberto: ab, tipo: "pausa"},
+        v === "tempo" ? {modo: "tempo", segundos: 1} : {modo: "condicao", condicao: CONDICAO_PADRAO.pagina(), ate: "aparecer", limite: 30, ao_expirar: "parar"});
+      desenharFluxo();
+    })));
+    if (b.modo === "tempo") {
+      const entrada = numero(b.segundos, v => { b.segundos = v; atualizarTitulo(); }, {min: "0.05", max: "600", step: "0.1"});
+      const rapidas = el("div", {class: "rapidas"});
+      for (const sg of [0.5, 1, 2, 5, 10])
+        rapidas.append(el("button", {class: "chip", type: "button", onclick: () => { b.segundos = sg; entrada.value = sg; atualizarTitulo(); }}, String(sg).replace(".", ",") + " s"));
+      caixa.append(campo("Quantos segundos? (0,05 a 600)", entrada), rapidas,
+        el("div", {class: "dica"}, "Dica: em vez de adivinhar o tempo, escolha “até uma condição”: o fluxo continua assim que a janela, a cor ou o elemento da página aparecer."));
+    } else {
+      caixa.append(editorCondicao(b.condicao, atualizarTitulo),
+        el("div", {class: "linha"},
+          el("div", {class: "cresce"}, campo("Continuar quando…", opcoesSelect([["aparecer", "isso aparecer"], ["sumir", "isso sumir"]], b.ate, v => { b.ate = v; atualizarTitulo(); }))),
+          el("div", {class: "cresce"}, campo("Esperar no máximo (segundos)", numero(b.limite, v => { b.limite = v; atualizarTitulo(); }, {min: "1", max: "3600"}))),
+          el("div", {class: "cresce"}, campo("Se o tempo acabar…", opcoesSelect([["parar", "parar o fluxo e avisar"], ["continuar", "seguir mesmo assim"]], b.ao_expirar, v => { b.ao_expirar = v; })))),
+        el("div", {class: "dica"}, "Apertar Num Lock cancela a espera a qualquer momento."));
+    }
+  } else if (t === "repetir") {
+    caixa.append(el("div", {class: "linha"},
+      el("div", {class: "cresce"}, campo("Repetir quantas vezes? (1 a 1000)", numero(b.vezes, v => { b.vezes = v; atualizarTitulo(); }, {min: "1", max: "1000"}))),
+      el("div", {class: "cresce"}, campo("Quantos blocos abaixo repetir?", numeroEstrutural(b.blocos, v => { b.blocos = v; }, {min: "1", max: "40"})))),
+      el("div", {class: "dica"}, "Os blocos recuados logo abaixo deste são repetidos. Ao inserir um bloco com o “+” dentro do grupo, ele entra no grupo sozinho."));
+  } else if (t === "se") {
+    caixa.append(editorCondicao(b.condicao, atualizarTitulo),
+      marcaCaixa("Inverter: executar quando a condição NÃO for verdadeira", b.negar, v => { b.negar = v; atualizarTitulo(); }),
+      el("div", {class: "linha"},
+        el("div", {class: "cresce"}, campo("ENTÃO: quantos blocos abaixo?", numeroEstrutural(b.entao, v => { b.entao = v; }, {min: "1", max: "40"}))),
+        el("div", {class: "cresce"}, campo("SENÃO: quantos blocos depois deles? (0 = nenhum)", numeroEstrutural(b.senao, v => { b.senao = v; }, {min: "0", max: "40"})))),
+      el("div", {class: "dica"}, "A condição é conferida uma vez, na hora. Os blocos do “então” (ou do “senão”) aparecem recuados logo abaixo; os demais continuam depois."));
+  } else if (t === "variavel") {
+    const agora = el("div", {class: "dica"});
+    const mostrarValor = () => { const v = cfg && cfg.variaveis ? cfg.variaveis[b.nome] : undefined; agora.textContent = "Valor atual de {" + b.nome + "}: " + (v === undefined ? "0 (ainda não usado)" : v); };
+    mostrarValor();
+    const linha = el("div", {class: "linha"},
+      el("div", {class: "cresce"}, campo("Nome (minúsculas, sem espaço)", texto1(b.nome, v => { b.nome = v.toLowerCase(); atualizarTitulo(); mostrarValor(); }, {maxlength: "20"}))),
+      el("div", {class: "cresce"}, campo("Operação", opcoesSelect([["somar", "somar"], ["definir", "definir o valor"], ["zerar", "zerar"]], b.operacao, v => { b.operacao = v; desenharFluxo(); }))));
+    if (b.operacao !== "zerar") linha.append(el("div", {class: "cresce"}, campo(b.operacao === "somar" ? "Somar quanto?" : "Valor", numero(b.valor, v => { b.valor = v; atualizarTitulo(); }))));
+    caixa.append(linha, agora, el("div", {class: "dica"}, "Use {" + b.nome + "} em qualquer texto dos outros blocos (digitar, colar, aviso, site, comando, WhatsApp…). O valor fica guardado mesmo depois de fechar o programa. {data} e {hora} também funcionam."));
+  } else if (t === "abrir") {
+    const caminho = texto1(b.caminho, v => { b.caminho = v; atualizarTitulo(); }, {placeholder: "C:\\Programas\\app.exe, meu_script.py, uma pasta ou só chrome"});
+    const args = texto1(b.argumentos, v => { b.argumentos = v; atualizarTitulo(); }, {placeholder: "Opcional. Ex.: https://www.google.com"});
+    const procurar = el("button", {class: "btn sec", type: "button"}, "Procurar arquivo…");
+    procurar.onclick = async () => {
+      try { const res = await api("/api/escolher-arquivo", {}); b.caminho = res.caminho; caminho.value = res.caminho; atualizarTitulo(); msg(""); }
+      catch (e) { msg(e.message); }
+    };
+    const pasta = el("button", {class: "btn sec", type: "button"}, "Escolher pasta…");
+    pasta.onclick = async () => {
+      try { const res = await api("/api/escolher-pasta", {}); b.caminho = res.caminho; caminho.value = res.caminho; atualizarTitulo(); msg(""); }
+      catch (e) { msg(e.message); }
+    };
+    caixa.append(campo("Programa, arquivo ou pasta", caminho), el("div", {class: "linha"}, procurar, pasta), campo("Argumentos (opcional)", args),
+      el("div", {class: "dica"}, "Scripts .py rodam com o Python instalado. Pastas abrem no Explorer. Para abrir o Chrome numa página: programa “chrome” e argumento com o endereço."));
+  } else if (t === "site") {
+    caixa.append(campo("Endereço do site", texto1(b.url, v => { b.url = v; atualizarTitulo(); }, {placeholder: "google.com"})),
+      marcaCaixa("Abrir no navegador do Deck (necessário para esperar/clicar elementos da página)", b.controlado, v => { b.controlado = v; atualizarTitulo(); }),
+      el("div", {class: "dica"}, "Sem a marcação, abre no navegador padrão do Windows. O navegador do Deck é um Chrome/Edge com perfil próprio: entre nas suas contas nele uma vez e o login fica guardado."));
+  } else if (t === "comando") {
+    const area = el("textarea", {maxlength: "1000", placeholder: "Ex.: Get-Date | Out-File C:\\\\log.txt"});
+    area.value = b.comando; area.oninput = () => { b.comando = area.value; atualizarTitulo(); };
+    caixa.append(campo("Rodar em", opcoesSelect([["powershell", "PowerShell"], ["cmd", "CMD (Prompt de Comando)"]], b.shell, v => { b.shell = v; atualizarTitulo(); })),
+      campo("Comando", area),
+      marcaCaixa("Esperar terminar (até 2 min). Se der erro, o fluxo para e avisa", b.esperar, v => { b.esperar = v; }),
+      el("div", {class: "dica"}, "Roda sem abrir janela. Só coloque aqui comandos que você entende: ele executa exatamente o que estiver escrito."));
+  } else if (t === "whatsapp") {
+    const area = el("textarea", {maxlength: "1000", placeholder: "Mensagem (pode usar {contador}, {data}, {hora})"});
+    area.value = b.mensagem; area.oninput = () => { b.mensagem = area.value; atualizarTitulo(); };
+    caixa.append(campo("Número com DDI e DDD (ex.: 5575999998888)", texto1(b.numero, v => { b.numero = v; atualizarTitulo(); }, {placeholder: "Deixe vazio para escolher o contato na hora"})),
+      campo("Mensagem", area),
+      marcaCaixa("Abrir no navegador do Deck", b.controlado, v => { b.controlado = v; }),
+      el("div", {class: "dica"}, "Abre a conversa com a mensagem já escrita. Quem envia é você (Enter). Para enviar sozinho: marque “navegador do Deck” e adicione depois um bloco “Esperar” (elemento do botão enviar) e “Clicar na página web”."));
+  } else if (t === "web_clicar" || t === "web_preencher") {
+    caixa.append(campo("Seletor do elemento", texto1(b.seletor, v => { b.seletor = v; atualizarTitulo(); }, {placeholder: "#enviar  ·  button.ok  ·  [aria-label='Enviar']"})));
+    if (t === "web_preencher") {
+      const area = el("textarea", {maxlength: "2000", placeholder: "Texto do campo (pode usar {contador}, {data}, {hora})"});
+      area.value = b.texto; area.oninput = () => { b.texto = area.value; };
+      caixa.append(campo("Texto a colocar no campo", area));
+    }
+    caixa.append(el("div", {class: "linha"},
+      el("div", {class: "cresce"}, campo("Só na aba cujo endereço/título contém (opcional)", texto1(b.aba, v => { b.aba = v; }, {placeholder: "Ex.: whatsapp"}))),
+      el("div", {class: "cresce"}, campo("Esperar o elemento aparecer por até (s)", numero(b.limite, v => { b.limite = v; }, {min: "1", max: "300"})))),
+      el("div", {class: "dica"}, "O bloco espera o elemento existir antes de agir, então não precisa de pausa. Funciona no navegador do Deck. " + AJUDA_SELETOR));
+  } else if (t === "midia") {
+    caixa.append(el("div", {class: "linha"},
+      el("div", {class: "cresce"}, campo("Função", opcoesSelect(Object.entries(MIDIA), b.acao, v => { b.acao = v; atualizarTitulo(); }))),
+      el("div", {class: "cresce"}, campo("Repetir (1 a 50)", numero(b.vezes, v => { b.vezes = v; atualizarTitulo(); }, {min: "1", max: "50"})))),
+      el("div", {class: "dica"}, "Cada repetição de volume muda 2%. Use 5 para mudar 10%."));
+  } else if (t === "captura") {
+    caixa.append(campo("Qual tela", opcoesSelect([["todas", "todos os monitores"], ["principal", "só o monitor principal"]], b.tela, v => { b.tela = v; atualizarTitulo(); })),
+      el("div", {class: "dica"}, "Salva um PNG na pasta Imagens\\NumpadDeck e mostra um aviso com o caminho. Para recortar uma área, use um bloco de atalho Win + Shift + S."));
+  } else if (t === "sistema") {
+    caixa.append(campo("Ação", opcoesSelect(Object.entries(SISTEMA), b.acao, v => { b.acao = v; atualizarTitulo(); })),
+      el("div", {class: "dica"}, "Bloquear pede a senha para voltar. O monitor volta ao mexer no mouse ou teclado."));
+  } else if (t === "chamar") {
+    const info = el("div", {class: "info-chamar"});
+    const pag = numero(b.pagina, v => { b.pagina = v; atualizarTitulo(); consultar(); }, {min: "1", list: "lista-numeros-pagina"});
+    const tec = opcoesSelect(ORDEM.map(x => [x, "Tecla " + x]), b.tecla, v => { b.tecla = v; atualizarTitulo(); consultar(); });
+    let espera = null;
+    const consultar = () => {
+      clearTimeout(espera);
+      espera = setTimeout(async () => {
+        try {
+          const d = await api("/api/tecla-info?pagina=" + encodeURIComponent(b.pagina) + "&tecla=" + encodeURIComponent(b.tecla));
+          info.style.color = d.etapas ? "var(--verde)" : "var(--verm)";
+          info.textContent = d.etapas ? "→ " + (d.pagina_nome ? d.pagina_nome + " · " : "") + (d.nome || d.titulo) + " · " + d.descricao : "Essa tecla ainda está sem função.";
+        } catch (_) { info.textContent = ""; }
+      }, 250);
+    };
+    caixa.append(el("div", {class: "linha"}, el("div", {class: "cresce"}, campo("Página da tecla", pag)), el("div", {class: "cresce"}, campo("Tecla", tec))), info,
+      el("div", {class: "dica"}, "O fluxo dessa tecla roda aqui, na ordem em que este bloco está. Uma tecla não pode chamar a si mesma, direta ou indiretamente."));
+    consultar();
+  } else if (t === "ir_pagina") {
+    const nome = el("div", {class: "info-chamar"});
+    const mostrarNome = () => { nome.textContent = nomePag(b.numero) ? "→ " + nomePag(b.numero) : ""; };
+    mostrarNome();
+    caixa.append(campo("Ir para a página (número)", numero(b.numero, v => { b.numero = v; atualizarTitulo(); mostrarNome(); }, {min: "1", list: "lista-numeros-pagina"})), nome,
+      el("div", {class: "dica"}, "O deck passa a usar essa página (a prévia aparece, se estiver ligada nas Opções). Os nomes das páginas aparecem na lista ao digitar."));
+  } else if (t === "aviso") {
+    corpoAviso(b, caixa, atualizarTitulo);
+  }
+  return caixa;
+}
+
+/* ---------- clique / mover: tela inteira ou janela de um programa ---------- */
+const ANCORAS = {
+  proporcional: "Proporcional — se a janela mudar de tamanho, o ponto anda junto (recomendado)",
+  topo_esq: "Fixo a partir do canto superior esquerdo",
+  topo_dir: "Fixo a partir do canto superior direito",
+  baixo_esq: "Fixo a partir do canto inferior esquerdo",
+  baixo_dir: "Fixo a partir do canto inferior direito",
+};
+function posicaoPadrao(alvo){
+  return alvo === "tela" ? {alvo: "tela", x: 0, y: 0}
+    : {alvo: "janela", janela: "", ancora: "proporcional", rx: 0.5, ry: 0.5, dx: 0, dy: 0, trazer: true};
+}
+function corpoPosicao(b, t, caixa, atualizarTitulo){
+  const janela = b.alvo === "janela";
+  caixa.append(campo("A posição vale para…", opcoesSelect([["tela", "A tela inteira (ponto fixo na tela)"], ["janela", "A janela de um programa (acompanha a janela se ela mudar de tamanho ou de lugar)"]], b.alvo || "tela", v => {
+    for (const k of ["x", "y", "janela", "ancora", "rx", "ry", "dx", "dy", "trazer"]) delete b[k];
+    Object.assign(b, posicaoPadrao(v)); desenharFluxo();
+  })));
+  const marcar = el("button", {class: "btn", type: "button"}, janela ? "◎ Marcar ponto na janela" : "◎ Marcar posição na tela");
+  const cancelar = el("button", {class: "btn sec", type: "button", onclick: () => api("/api/cancelar", {})}, "Cancelar");
+  marcar.onclick = async () => {
+    marcar.disabled = true; msg("");
+    try {
+      if (!janela) { const res = await api("/api/capturar-clique", {}); b.x = res.x; b.y = res.y; msg("Posição marcada: (" + res.x + ", " + res.y + ")", true); }
+      else {
+        const res = await api("/api/capturar-clique", {alvo: "janela", ancora: b.ancora});
+        b.janela = res.janela; for (const k of ["rx", "ry", "dx", "dy"]) if (res[k] !== undefined) b[k] = res[k];
+        msg("Marcado na janela “" + res.janela + "”. Se o título muda (ex.: nome do arquivo), deixe só a parte fixa dele.", true);
+      }
+    } catch (e) { msg(e.message); }
+    desenharFluxo();
+  };
+  caixa.append(el("div", {class: "linha"}, marcar, cancelar));
+  if (!janela) {
+    caixa.append(el("div", {class: "linha"},
+      el("div", {class: "cresce"}, campo("X", numero(b.x, v => { b.x = v; atualizarTitulo(); }))),
+      el("div", {class: "cresce"}, campo("Y", numero(b.y, v => { b.y = v; atualizarTitulo(); })))));
+  } else {
+    caixa.append(
+      campo("Parte do título da janela do programa", texto1(b.janela, v => { b.janela = v; atualizarTitulo(); }, {placeholder: "Ex.: Excel, Bloco de Notas, Google Chrome", maxlength: "100"})),
+      campo("Como o ponto acompanha a janela", opcoesSelect(Object.entries(ANCORAS), b.ancora, v => {
+        b.ancora = v; if (v !== "proporcional" && b.dx === undefined) { b.dx = 0; b.dy = 0; } desenharFluxo();
+      })));
+    if (b.ancora === "proporcional") {
+      caixa.append(el("div", {class: "linha"},
+        el("div", {class: "cresce"}, campo("Posição na largura da janela (%)", numero(Math.round(b.rx * 1000) / 10, v => { b.rx = v / 100; atualizarTitulo(); }, {min: "0", max: "100", step: "0.1"}))),
+        el("div", {class: "cresce"}, campo("Posição na altura da janela (%)", numero(Math.round(b.ry * 1000) / 10, v => { b.ry = v / 100; atualizarTitulo(); }, {min: "0", max: "100", step: "0.1"})))));
+    } else {
+      caixa.append(el("div", {class: "linha"},
+        el("div", {class: "cresce"}, campo("Distância horizontal do canto (px)", numero(b.dx, v => { b.dx = v; atualizarTitulo(); }, {min: "0"}))),
+        el("div", {class: "cresce"}, campo("Distância vertical do canto (px)", numero(b.dy, v => { b.dy = v; atualizarTitulo(); }, {min: "0"})))));
+    }
+    caixa.append(marcaCaixa("Trazer a janela para a frente antes (e abrir se estiver minimizada)", b.trazer, v => { b.trazer = v; }));
+  }
+  if (t === "clique") {
+    caixa.append(campo("Botão", opcoesSelect([["esquerdo", "Esquerdo"], ["direito", "Direito"], ["meio", "Do meio"]], b.botao, v => { b.botao = v; atualizarTitulo(); })),
+      marcaCaixa("Clique duplo", b.duplo, v => { b.duplo = v; atualizarTitulo(); }));
+  }
+  caixa.append(el("div", {class: "dica"}, janela
+    ? "A cada execução o Deck acha a janela pelo título, vê onde ela está e de que tamanho, e clica no ponto correspondente. “Proporcional” serve quando o conteúdo estica junto com a janela; para botões de barra de ferramentas que ficam num canto, use “Fixo a partir do canto”. A área considerada é a de dentro da janela (sem a barra de título). Se a janela ainda não abriu, coloque antes um bloco “Esperar” pela janela."
+    : "A tela escurece: clique onde deseja. Esc cancela. Esta posição é fixa na tela; se o programa mudar de tamanho ou lugar, escolha “A janela de um programa”."));
+}
+
+/* ---------- aviso: pop-up, WhatsApp (Evolution API) e Bloco de Notas ---------- */
+function retanguloAviso(b){   // [x, y, l, a] em frações da tela (a mesma conta do programa, para a miniatura ser fiel)
+  if (b.posicao === "personalizado") return b.area ? [b.area.x, b.area.y, b.area.l, b.area.a] : null;
+  const [l, a] = TAMANHOS_AVISO[b.tamanho], mx = 0.02 * 9 / 16, my = 0.02;
+  const x = {esq: mx, meio: (1 - l) / 2, dir: 1 - l - mx}, y = {topo: my, meio: (1 - a) / 2, base: 1 - a - my};
+  const p = {centro: [x.meio, y.meio], topo: [x.meio, y.topo], baixo: [x.meio, y.base], topo_esq: [x.esq, y.topo],
+             topo_dir: [x.dir, y.topo], baixo_esq: [x.esq, y.base], baixo_dir: [x.dir, y.base]}[b.posicao];
+  return [p[0], p[1], l, a];
+}
+function telaMini(ret, grande){
+  const tela = el("div", {class: "tela-mini" + (grande ? " grande" : "")});
+  if (ret) {
+    const d = el("div", {class: "ret-aviso"});
+    d.style.cssText = "left:" + ret[0] * 100 + "%;top:" + ret[1] * 100 + "%;width:" + ret[2] * 100 + "%;height:" + ret[3] * 100 + "%";
+    tela.append(d);
+  }
+  return tela;
+}
+
+let evolutionConfigurada = null;   // null = ainda não consultei
+async function estadoEvolution(alvo){
+  try {
+    const e = await api("/api/avisos-config");
+    evolutionConfigurada = !!(e.evolution_url && e.evolution_instancia && e.evolution_chave_definida);
+    alvo.className = "evo-estado " + (evolutionConfigurada ? "bom" : "mau");
+    alvo.textContent = evolutionConfigurada ? "✔ Evolution API configurada (instância “" + e.evolution_instancia + "”). A mensagem sai do seu WhatsApp." : "⚠ A Evolution API ainda não foi configurada. Abra Opções → WhatsApp (Evolution API).";
+  } catch (_) { alvo.textContent = ""; }
+}
+
+function corpoAviso(b, caixa, atualizarTitulo){
+  caixa.append(campo("Como avisar", opcoesSelect([["popup", "Pop-up na tela"], ["whatsapp", "Mensagem no WhatsApp"], ["bloco_notas", "Bloco de Notas (abrir um TXT ou a saída de um programa)"]], b.canal || "popup", (v) => {
+    const id = b._id, ab = b._aberto;
+    for (const k of Object.keys(b)) delete b[k];
+    Object.assign(b, {_id: id, _aberto: ab, tipo: "aviso"}, AVISO_PADRAO[v]());
+    desenharFluxo();
+  })));
+  if (b.canal === "whatsapp") {
+    const area = el("textarea", {maxlength: "1000", placeholder: "Ex.: Impostos apurados do pedido {pedido}. (pode usar {contador}, {data}, {hora})"});
+    area.value = b.texto; area.oninput = () => { b.texto = area.value; atualizarTitulo(); };
+    const evolution = b.modo === "evolution";
+    caixa.append(campo("Como enviar", opcoesSelect([["link", "Abrir o link do WhatsApp (wa.me) e apertar Enter"], ["evolution", "Pela Evolution API (sem abrir nada na tela)"]], b.modo || "link", v => { b.modo = v; desenharFluxo(); })),
+      campo("Enviar para o número (com DDI e DDD, ex.: 5577991831413)", texto1(b.numero, v => { b.numero = v; atualizarTitulo(); }, {placeholder: "5577991831413", inputmode: "numeric"})),
+      campo("Mensagem", area));
+    if (evolution) {
+      const estado = el("div", {class: "evo-estado"});
+      estadoEvolution(estado);
+      caixa.append(estado, el("div", {class: "dica"}, "Usa a sua Evolution API: a mensagem sai do WhatsApp conectado nela, sem abrir navegador nem usar o teclado. Use ▶ no topo do bloco para mandar um teste."));
+    } else {
+      caixa.append(campo("Esperar o WhatsApp abrir antes de apertar Enter (segundos)", numero(b.espera, v => { b.espera = v; }, {min: "1", max: "120"})),
+        el("div", {class: "dica"}, "Abre https://wa.me/número?text=mensagem (no WhatsApp Web ou no app, conforme o computador), espera esse tempo e aperta Enter para enviar. Durante a espera, não troque de janela nem mexa no teclado: o Enter vai para a janela que estiver em primeiro plano. Não precisa de Evolution API nem de chave."));
+    }
+  } else if (b.canal === "bloco_notas") {
+    const saida = b.origem === "saida";
+    caixa.append(campo("O que abrir no Bloco de Notas", opcoesSelect([["arquivo", "Um arquivo TXT que já existe (ex.: o programa Python gerou)"], ["saida", "A saída de um programa ou comando (o Deck cria o TXT)"]], b.origem, v => { b.origem = v; desenharFluxo(); })));
+    const pasta = texto1(b.pasta, v => { b.pasta = v; }, {placeholder: saida ? "Vazio = na pasta do script" : "Ex.: C:\\Relatorios (vazio = pasta de saídas do Deck)"});
+    const escolherPasta = el("button", {class: "btn sec", type: "button"}, "Escolher pasta…");
+    escolherPasta.onclick = async () => { try { const res = await api("/api/escolher-pasta", {}); b.pasta = res.caminho; pasta.value = res.caminho; msg(""); } catch (e) { msg(e.message); } };
+    if (!saida) {
+      caixa.append(campo("Nome do arquivo (ou caminho completo)", texto1(b.arquivo, v => { b.arquivo = v; atualizarTitulo(); }, {placeholder: "relatorio.txt"})),
+        campo("Pasta onde ele fica (opcional)", pasta), el("div", {class: "linha"}, escolherPasta),
+        el("div", {class: "dica"}, "Se o programa Python grava o TXT na mesma pasta dele, informe essa pasta (ou o caminho completo no nome). Se o arquivo não existir na hora, o fluxo para e avisa."));
+    } else {
+      const comando = texto1(b.comando, v => { b.comando = v; atualizarTitulo(); }, {placeholder: b.shell === "python" ? "C:\\scripts\\lista.py  (pode ter argumentos depois)" : "Comando"});
+      const procurar = el("button", {class: "btn sec", type: "button"}, "Procurar script…");
+      procurar.onclick = async () => { try { const res = await api("/api/escolher-arquivo", {}); b.comando = res.caminho; comando.value = res.caminho; atualizarTitulo(); msg(""); } catch (e) { msg(e.message); } };
+      caixa.append(campo("Rodar com", opcoesSelect([["python", "Script Python (.py)"], ["powershell", "PowerShell"], ["cmd", "CMD (Prompt de Comando)"]], b.shell, v => { b.shell = v; desenharFluxo(); })),
+        campo(b.shell === "python" ? "Script e argumentos" : "Comando", comando),
+        b.shell === "python" ? el("div", {class: "linha"}, procurar) : el("span"),
+        el("div", {class: "linha"},
+          el("div", {class: "cresce"}, campo("Salvar a saída como (opcional)", texto1(b.arquivo, v => { b.arquivo = v; }, {placeholder: "resultado.txt (vazio = nome com data e hora)"}))),
+          el("div", {class: "cresce"}, campo("Esperar terminar por até (s)", numero(b.limite, v => { b.limite = v; }, {min: "1", max: "3600"})))),
+        campo("Pasta do TXT (opcional)", pasta), el("div", {class: "linha"}, escolherPasta),
+        el("div", {class: "dica"}, "Tudo que o programa escrever na tela (print, erros) vai para o TXT, que abre no Bloco de Notas quando ele terminar. Sem pasta, o TXT fica ao lado do script (ou em “saidas”, na pasta de dados do Deck). O fluxo espera o programa terminar."));
+    }
+  } else {
+    const rotulos = Object.entries(TAMANHOS_AVISO);
+    const tamanhos = el("div", {class: "tamanhos"});
+    const personalizado = b.posicao === "personalizado";
+    if (personalizado) {
+      tamanhos.append(el("div", {class: "tam atual"}, telaMini(retanguloAviso(b), true), el("span", {}, b.area ? "Área que você desenhou" : "Nenhuma área desenhada ainda")));
+    } else {
+      for (const [chave, [, , nome]] of rotulos)
+        tamanhos.append(el("button", {type: "button", class: "tam" + (b.tamanho === chave ? " atual" : ""), onclick: () => { b.tamanho = chave; desenharFluxo(); }},
+          telaMini(retanguloAviso(Object.assign({}, b, {tamanho: chave}))), el("span", {}, nome)));
+    }
+    const posicoes = el("div", {class: "funcoes"});
+    for (const [chave, nome] of Object.entries(POSICOES_AVISO))
+      posicoes.append(el("button", {type: "button", class: "chip" + (b.posicao === chave ? " atual" : ""), onclick: () => {
+        b.posicao = chave; if (chave !== "personalizado") delete b.area; desenharFluxo();
+      }}, nome));
+    const desenhar = el("button", {class: "btn", type: "button"}, "✎ Desenhar na tela onde o aviso aparece");
+    desenhar.onclick = async () => {
+      desenhar.disabled = true; msg("Arraste na tela para desenhar o retângulo do aviso (Esc cancela).", true);
+      try { b.area = await api("/api/capturar-area", {}); msg("Área salva.", true); } catch (e) { msg(e.message); }
+      desenharFluxo();
+    };
+    const t = texto1(b.titulo, v => { b.titulo = v; }, {maxlength: "60", placeholder: "Opcional. Ex.: Sistema Python"});
+    const area = el("textarea", {maxlength: "500", placeholder: "Ex.: Sistema Python já finalizou. (pode usar {contador}, {data}, {hora})"});
+    area.value = b.texto; area.oninput = () => { b.texto = area.value; atualizarTitulo(); };
+    caixa.append(campo("Título (opcional)", t), campo("Mensagem", area),
+      el("div", {}, el("div", {class: "cat-nome"}, personalizado ? "Tamanho" : "Tamanho (a miniatura mostra a tela e onde o aviso fica)"), tamanhos),
+      el("div", {}, el("div", {class: "cat-nome"}, "Onde aparece"), posicoes),
+      personalizado ? el("div", {class: "linha"}, desenhar) : el("span"),
+      campo("Fica na tela por (segundos; 0 = até você clicar nele)", numero(b.segundos, v => { b.segundos = v; }, {min: "0", max: "120"})),
+      el("div", {class: "dica"}, "Use ▶ no topo do bloco para ver o aviso agora. Clicar no aviso fecha ele. Dois avisos no mesmo lugar: o novo cobre o antigo."));
+  }
+}
+
+$("add-bloco").onclick = () => novoBloco();
+
+/* imagem */
+$("ed-img-btn").onclick = () => $("ed-img-arq").click();
+$("ed-img-rm").onclick = () => { r.imagem = null; pintarPrevia(); };
+$("ed-img-arq").onchange = async (ev) => {
+  const arq = ev.target.files[0];
+  ev.target.value = "";
+  if (!arq) return;
+  try {
+    const fd = new FormData(); fd.append("arquivo", arq);
+    r.imagem = (await api("/api/imagem", fd)).imagem;
+    pintarPrevia(); msg("");
+  } catch (e) { msg(e.message); }
+};
+
+/* rodapé */
+function conferir(){
+  const i = r.fluxo.findIndex(b => !b.tipo);
+  if (i >= 0) { r.fluxo[i]._aberto = true; desenharFluxo(); throw new Error("Bloco " + (i + 1) + ": escolha a função."); }
+}
+async function testar(fluxo){
+  try {
+    if (fluxo.some(b => !b.tipo)) throw new Error("Escolha a função do bloco antes de testar.");
+    await api("/api/testar", {fluxo}); msg("Executando…", true);
+  } catch (e) { msg(e.message); }
+}
+$("ed-testar").onclick = () => testar(fluxoLimpo());
+$("ed-salvar").onclick = async () => {
+  try {
+    conferir();
+    await api("/api/tecla", {pagina: r.pagina, tecla: r.tecla, nome: $("ed-nome").value, imagem: r.imagem, fluxo: fluxoLimpo()});
+    $("editor").close(); atualizar();
+  } catch (e) { msg(e.message); }
+};
+$("ed-limpar").onclick = async () => {
+  try { await api("/api/tecla/limpar", {pagina: r.pagina, tecla: r.tecla}); $("editor").close(); atualizar(); }
+  catch (e) { msg(e.message); }
+};
+$("ed-fechar").onclick = () => $("editor").close();
+$("editor").addEventListener("close", () => { api("/api/cancelar", {}).catch(() => {}); });
+
+/* ---------- opções ---------- */
+const OPCOES = [
+  ["popup_ao_trocar_pagina", "Mostrar a prévia da página (imagens e nomes) ao trocar de página"],
+  ["popup_ao_trocar_modo", "Mostrar aviso ao alternar entre modo padrão e modo deck"],
+  ["apitar_fora_do_deck", "Apitar ao apertar / * − no modo padrão (a tecla continua funcionando normalmente)"],
+  ["restaurar_numlock_ao_sair", "Religar o Num Lock ao encerrar o programa"],
+];
+
+function montarOpcoes(){
+  const lista = $("lista-opcoes");
+  lista.dataset.pronto = "1";
+  for (const [chave, texto] of OPCOES) {
+    const cx = el("input", {type: "checkbox", id: "op-" + chave});
+    cx.checked = !!cfg.opcoes[chave];
+    cx.onchange = () => api("/api/opcoes", {[chave]: cx.checked}).catch(() => {});
+    lista.append(el("label", {class: "check"}, cx, texto));
+  }
+  const seg = el("input", {type: "number", id: "op-perfil_segundos", min: "2", max: "120", style: "width:90px"});
+  seg.value = cfg.opcoes.perfil_segundos;
+  seg.onchange = () => api("/api/opcoes", {perfil_segundos: Number(seg.value)}).catch((e) => { alert(e.message); seg.value = cfg.opcoes.perfil_segundos; });
+  lista.append(el("label", {class: "check"}, seg, "segundos que a prévia aberta com − fica na tela (2 a 120)"));
+  const auto = el("input", {type: "checkbox", id: "op-autostart"});
+  auto.checked = !!cfg.autostart;
+  auto.onchange = async () => {
+    try { auto.checked = (await api("/api/autostart", {ligado: auto.checked})).autostart; }
+    catch (e) { auto.checked = !auto.checked; alert(e.message); }
+  };
+  lista.append(el("label", {class: "check"}, auto, "Iniciar junto com o Windows (em segundo plano)"));
+}
+
+async function montarEvolution(){
+  const caixa = $("evolution");
+  let e;
+  try { e = await api("/api/avisos-config"); } catch (_) { return; }
+  const url = texto1(e.evolution_url, () => {}, {placeholder: "http://localhost:8080  ou  https://evolution.meusite.com"});
+  const inst = texto1(e.evolution_instancia, () => {}, {placeholder: "Nome da instância conectada ao WhatsApp"});
+  const chave = el("input", {type: "password", autocomplete: "off", placeholder: e.evolution_chave_definida ? "•••••• (já salva — deixe vazio para manter)" : "apikey da instância (ou a global)"});
+  const estado = el("div", {class: "evo-estado"});
+  const salvar = el("button", {class: "btn ok", type: "button"}, "Salvar");
+  salvar.onclick = async () => {
+    try {
+      const corpoPedido = {evolution_url: url.value, evolution_instancia: inst.value};
+      if (chave.value) corpoPedido.evolution_chave = chave.value;
+      await api("/api/avisos-config", corpoPedido);
+      chave.value = ""; estado.className = "evo-estado bom"; estado.textContent = "Salvo."; montarEvolution();
+    } catch (er) { estado.className = "evo-estado mau"; estado.textContent = er.message; }
+  };
+  const apagar = el("button", {class: "btn sec", type: "button"}, "Apagar chave salva");
+  apagar.onclick = async () => {
+    try { await api("/api/avisos-config", {evolution_url: url.value, evolution_instancia: inst.value, limpar_chave: true}); montarEvolution(); }
+    catch (er) { estado.className = "evo-estado mau"; estado.textContent = er.message; }
+  };
+  const numeroTeste = texto1("", () => {}, {placeholder: "Seu número para o teste, ex.: 5575999998888", inputmode: "numeric"});
+  const testar = el("button", {class: "btn sec", type: "button"}, "Enviar mensagem de teste");
+  testar.onclick = async () => {
+    testar.disabled = true; estado.className = "evo-estado"; estado.textContent = "Enviando…";
+    try { await api("/api/avisos-testar", {numero: numeroTeste.value}); estado.className = "evo-estado bom"; estado.textContent = "Enviada! Confira o WhatsApp."; }
+    catch (er) { estado.className = "evo-estado mau"; estado.textContent = er.message; }
+    testar.disabled = false;
+  };
+  caixa.replaceChildren(el("h2", {}, "WhatsApp (Evolution API)"),
+    el("div", {class: "dica"}, "Usado pelo aviso “Mensagem no WhatsApp” quando o envio é “Pela Evolution API”. A chave fica só neste computador, num arquivo separado (segredos.json), e nunca volta para esta tela nem vai para o GitHub."),
+    campo("Endereço da Evolution API", url), campo("Instância", inst), campo("Chave (apikey)", chave),
+    el("div", {class: "linha"}, salvar, apagar),
+    el("div", {class: "linha"}, el("div", {class: "cresce"}, numeroTeste), testar), estado);
+}
+
+$("abrir-opcoes").onclick = () => { montarEvolution(); $("opcoes").showModal(); };
+$("op-fechar").onclick = () => $("opcoes").close();
+$("encerrar").onclick = async () => {
+  if (!confirm("Encerrar o Numpad Deck? As teclas voltam ao normal.")) return;
+  try { await api("/api/encerrar", {}); } catch (_) {}
+  ativo = false;
+  document.body.replaceChildren(el("div", {class: "aviso"}, "Programa encerrado. Abra o NumpadDeck novamente quando quiser usar."));
+};
+
+/* ---------- início ---------- */
+setInterval(() => { if (ativo && !document.hidden) atualizar(); }, 800);
+atualizar();
+</script>
+</body>
+</html>

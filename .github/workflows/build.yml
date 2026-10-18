@@ -1,0 +1,35 @@
+name: Gerar executavel
+
+# Roda quando voce publica uma versao (git tag v1.0 && git push --tags) ou manualmente na aba Actions.
+# O NumpadDeck.exe fica anexado na release (ou como "artifact" no execucao manual).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements.txt pyinstaller
+      - name: Testes
+        run: python -m unittest tests.test_configuracao tests.test_nucleo tests.test_servidor
+      - name: Gerar o .exe
+        run: python -m PyInstaller --noconsole --onefile --name NumpadDeck --add-data "web;web" --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 --hidden-import PIL._tkinter_finder --hidden-import websocket main.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NumpadDeck
+          path: dist/NumpadDeck.exe
+      - name: Anexar na release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/NumpadDeck.exe
