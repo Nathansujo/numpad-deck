@@ -20,7 +20,9 @@ from pathlib import Path
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 from werkzeug.serving import make_server
 
+from atualizador import ErroAtualizacao
 from avisos import ErroAviso
+from versao import VERSAO
 from configuracao import ANCORAS_JANELA, ErroConfig, TECLAS, descrever_bloco, descrever_fluxo, validar_bloco
 
 
@@ -29,7 +31,7 @@ def recurso(*partes: str) -> Path:
     return base.joinpath(*partes)
 
 
-def criar_app(cfg, nucleo, ui, plat, token: str, porta: int) -> Flask:
+def criar_app(cfg, nucleo, ui, plat, token: str, porta: int, atualizar=None) -> Flask:
     app = Flask(__name__, static_folder=None)
     app.config["MAX_CONTENT_LENGTH"] = 6 * 1024 * 1024
     hosts_ok = {f"127.0.0.1:{porta}", f"localhost:{porta}"}
@@ -106,6 +108,7 @@ def criar_app(cfg, nucleo, ui, plat, token: str, porta: int) -> Flask:
     def config():
         dados = cfg.snapshot()
         dados["autostart"] = bool(plat.autostart_ligado())
+        dados["versao_programa"] = VERSAO
         return jsonify(dados)
 
     @app.post("/api/pagina")
@@ -271,6 +274,15 @@ def criar_app(cfg, nucleo, ui, plat, token: str, porta: int) -> Flask:
         numero = validar_bloco({"tipo": "aviso", "canal": "whatsapp", "numero": corpo().get("numero"), "texto": "x"})["numero"]
         plat.enviar_whatsapp(numero, "Teste do Numpad Deck: a Evolution API está funcionando.")
         return jsonify({"ok": True})
+
+    @app.post("/api/atualizar")
+    def procurar_atualizacao():
+        if atualizar is None:
+            return jsonify({"status": "dev", "tag": VERSAO})
+        try:
+            return jsonify(atualizar(manual=True))
+        except ErroAtualizacao as e:
+            return erro(str(e), 502)
 
     @app.post("/api/autostart")
     def autostart():

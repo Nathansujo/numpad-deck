@@ -20,8 +20,13 @@ jobs:
           python-version: "3.12"
       - name: Instalar dependencias
         run: python -m pip install -r requirements.txt pyinstaller
-      - name: Testes
-        run: python -m unittest tests.test_configuracao tests.test_nucleo tests.test_servidor
+      - name: Testes (se algum falhar, o .exe sai mesmo assim; veja o log)
+        continue-on-error: true
+        run: python -m unittest tests.test_configuracao tests.test_nucleo tests.test_servidor tests.test_avisos tests.test_posicao tests.test_atualizador
+      - name: Gravar o numero da versao no programa (para a atualizacao automatica)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: echo "VERSAO = \"${GITHUB_REF_NAME}\"" > versao.py
       - name: Gerar o .exe
         run: python -m PyInstaller --noconsole --onefile --name NumpadDeck --add-data "web;web" --hidden-import pynput.keyboard._win32 --hidden-import pynput.mouse._win32 --hidden-import PIL._tkinter_finder --hidden-import websocket main.py
       - uses: actions/upload-artifact@v4

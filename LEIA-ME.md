@@ -112,10 +112,22 @@ O painel abre no navegador (`http://127.0.0.1:5077`). O programa continua rodand
 
 ## Gerar o executável
 
-Dê dois cliques em `build.bat`. O arquivo `dist\NumpadDeck.exe` é o que você coloca na Área de Trabalho:
+**No Linux, sem GitHub:** `sudo apt install wine64 curl` e `./build-no-linux.sh`. Ele instala o Python de Windows dentro do Wine (só na primeira vez) e gera `dist/NumpadDeck.exe`.
+
+**No Linux, pelo GitHub:** o `.exe` é um programa de Windows e só pode ser montado por um Windows. Outro jeito é deixar o GitHub fazer (grátis, repositório privado): instale `git` e `gh`, rode `gh auth login` uma vez e depois `./gerar-exe-pelo-github.sh`. O script envia o projeto para um repositório seu, manda montar e baixa o resultado em `dist/NumpadDeck.exe` (uns 3 a 6 minutos). Ou, sem script: envie o projeto ao GitHub e rode *Actions → Gerar executavel → Run workflow*.
+
+**No Windows:** dê dois cliques em `build.bat`. O arquivo `dist\NumpadDeck.exe` é o que você coloca na Área de Trabalho:
 
 - Abrir o `.exe` mostra o painel (se já estiver rodando, só abre o painel).
 - Em *Opções*, marque **Iniciar junto com o Windows** para ele subir sozinho em segundo plano.
+
+## Atualização automática
+
+O `NumpadDeck.exe` (baixado da Release do GitHub) procura uma versão mais nova ao abrir. Se houver, baixa, confere (origem oficial, tamanho, SHA-256), troca o arquivo e reinicia sozinho; as suas teclas e configurações não mudam. Pode desligar em Opções ou usar "Procurar atualização agora".
+
+Para publicar uma atualização: `git add -A && git commit -m "..." && git push && git tag v1.2 && git push --tags` (use sempre um número maior que o anterior). O GitHub gera o .exe com esse número gravado dentro.
+
+Observações: o repositório precisa ser público; a primeira versão com atualizador precisa ser instalada manualmente; o .exe não é assinado, então o Windows pode avisar na primeira execução; rodando por `python main.py` nada se atualiza.
 
 ## Usar em mais de um computador
 
@@ -152,4 +164,4 @@ Cobrem as regras de teclas (modo padrão/deck, `/`, `*`, `-`, repetição, Num L
 
 ## Arquivos
 
-`main.py` (entrada) · `posicao.py` (clique relativo à janela) · `navegador.py` (navegador do Deck) · `avisos.py` (pop-up, WhatsApp/Evolution, saída para o Bloco de Notas) · `instalar.bat`, `iniciar.bat`, `atualizar.bat`, `build.bat` · `nucleo.py` (regras das teclas) · `configuracao.py` (JSON, validação, imagens) · `servidor.py` + `web/index.html` (painel) · `hook_win.py`, `ui_tk.py` (pop-ups), `plataforma_win.py` (partes do Windows) · `teclas.py` (nomes das teclas)
+`main.py` (entrada) · `posicao.py` (clique relativo à janela) · `navegador.py` (navegador do Deck) · `avisos.py` (pop-up, WhatsApp/Evolution, saída para o Bloco de Notas) · `instalar.bat`, `iniciar.bat`, `atualizar.bat`, `build.bat`, `build-no-linux.sh`, `gerar-exe-pelo-github.sh` · `nucleo.py` (regras das teclas) · `configuracao.py` (JSON, validação, imagens) · `servidor.py` + `web/index.html` (painel) · `hook_win.py`, `ui_tk.py` (pop-ups), `plataforma_win.py` (partes do Windows) · `teclas.py` (nomes das teclas)

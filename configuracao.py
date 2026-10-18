@@ -34,6 +34,7 @@ OPCOES_PADRAO = {
     "popup_ao_trocar_modo": True,     # aviso ao alternar padrão <-> deck
     "apitar_fora_do_deck": True,      # / * - apitam no modo padrão (a tecla continua normal)
     "restaurar_numlock_ao_sair": True,
+    "atualizar_ao_abrir": True,       # o .exe procura versão nova no GitHub ao abrir, baixa e reinicia
     "perfil_segundos": 10,            # quanto tempo a prévia aberta com "-" fica na tela
     "porta": 5077,
 }
@@ -145,8 +146,8 @@ def validar_condicao(c) -> dict:
         alvo = c.get("alvo", "seletor")
         if alvo not in ("seletor", "texto"):
             raise ErroConfig("Escolha o que procurar na página.")
-        return {"tipo": tipo, "alvo": alvo,
-                "valor": _texto(c.get("valor"), 1, 300, "Escreva o seletor ou o texto a procurar na página.").strip(),
+        valor = _texto(c.get("valor"), 1, 300, "Escreva o seletor ou o texto a procurar na página.").strip()
+        return {"tipo": tipo, "alvo": alvo, "valor": corrigir_seletor(valor) if alvo == "seletor" else valor,
                 "aba": _opcional(c.get("aba"), 100, "Filtro de aba inválido.")}
     raise ErroConfig("Escolha o tipo de condição.")
 
@@ -282,7 +283,7 @@ def validar_bloco(bloco) -> dict:
 
     if tipo in ("web_clicar", "web_preencher"):
         saida = {"tipo": tipo,
-                 "seletor": _texto(bloco.get("seletor"), 1, 300, "Escreva o seletor do elemento (ex.: #enviar ou button.ok).").strip(),
+                 "seletor": corrigir_seletor(_texto(bloco.get("seletor"), 1, 300, "Escreva o seletor do elemento (ex.: #enviar ou button.ok).").strip()),
                  "aba": _opcional(bloco.get("aba"), 100, "Filtro de aba inválido."),
                  "limite": _inteiro(bloco.get("limite", 10), 1, 300, "Tempo máximo para o elemento aparecer: de 1 a 300 segundos.")}
         if tipo == "web_preencher":
@@ -349,6 +350,22 @@ def _validar_posicao(bloco: dict) -> dict:
         for chave in ("dx", "dy"):
             saida[chave] = _inteiro(bloco.get(chave), 0, 20000, "Marque o ponto dentro da janela (distância do canto em pixels).")
     return saida
+
+
+_TAGS_HTML = frozenset("""a abbr article aside b body br button canvas caption code div em fieldset footer form h1 h2 h3 h4 h5 h6
+header hr i iframe img input label legend li main nav ol option p pre section select small span strong sub summary
+sup table tbody td textarea tfoot th thead tr u ul""".split())
+
+
+def corrigir_seletor(seletor: str) -> str:
+    """Quem copia o atributo class do HTML ("btn btn-primary btn-block") escreve só nomes separados por
+    espaço; em CSS isso procuraria elementos <btn>. Aqui vira ".btn.btn-primary.btn-block". Seletores de
+    verdade (com ponto, #, [, >, : ou só nomes de tags HTML, como "div span") ficam como estão."""
+    palavras = seletor.split()
+    if len(palavras) >= 2 and all(re.fullmatch(r"[A-Za-z_][\w-]*", p) for p in palavras) \
+            and not all(p.lower() in _TAGS_HTML for p in palavras):
+        return "." + ".".join(palavras)
+    return seletor
 
 
 def _numero_whatsapp(bruto, obrigatorio: bool) -> str:

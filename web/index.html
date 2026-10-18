@@ -553,17 +553,23 @@ function desenharFluxo(){
   caixa.replaceChildren();
   if (!r.fluxo.length) caixa.append(el("div", {class: "fluxo-vazio"}, "Nenhum bloco ainda. Clique em “+ Adicionar bloco”."));
   const est = estrutura();
+  let viuNavegadorDoDeck = false;
+  const semNavegador = r.fluxo.map(b => {   // blocos que olham a página web sem um "Abrir site" do navegador do Deck antes
+    if (b.tipo === "site" && b.controlado) viuNavegadorDoDeck = true;
+    const usaWeb = b.tipo === "web_clicar" || b.tipo === "web_preencher" || ((b.tipo === "pausa" || b.tipo === "se") && b.condicao && b.condicao.tipo === "pagina" && (b.tipo === "se" || b.modo === "condicao"));
+    return usaWeb && !viuNavegadorDoDeck;
+  });
   r.fluxo.forEach((b, i) => {
     const recuo = "margin-left:" + (est.prof[i] * 22) + "px";
     if (i > 0) caixa.append(el("div", {class: "conector", style: recuo}, el("button", {type: "button", title: "Inserir um bloco aqui", onclick: () => novoBloco(i)}, "+")));
     if (est.tag[i]) caixa.append(el("div", {class: "grupo-tag", style: recuo}, "↳ " + est.tag[i]));
-    const card = cartao(b, i, est.erro[i]);
+    const card = cartao(b, i, est.erro[i], semNavegador[i]);
     card.style.marginLeft = (est.prof[i] * 22) + "px";
     caixa.append(card);
   });
 }
 
-function cartao(b, i, erroGrupo){
+function cartao(b, i, erroGrupo, semNavegador){
   const f = FUNCOES[b.tipo] || {icone: "➕", nome: ""};
   const titulo = el("div", {class: "bloco-titulo" + (b.tipo ? "" : " vazio")}, resumo(b));
   const alca = el("span", {class: "alca", title: "Arraste para mudar a ordem"}, "⠿");
@@ -577,6 +583,7 @@ function cartao(b, i, erroGrupo){
     alca, el("span", {class: "bloco-num"}, String(i + 1)), el("span", {class: "bloco-icone"}, f.icone), titulo, ctl);
   const card = el("div", {class: "bloco" + (b._aberto ? " aberto" : "") + (erroGrupo ? " erro-grupo" : ""), "data-indice": String(i)}, topo);
   if (erroGrupo) card.append(el("div", {class: "aviso-grupo"}, "⚠ " + erroGrupo));
+  if (semNavegador) card.append(el("div", {class: "aviso-grupo"}, "⚠ Este bloco olha a página web, mas antes dele não há um “Abrir site” marcado com “Abrir no navegador do Deck”. Se a página abrir no navegador comum, o Deck não vai achar o elemento."));
   if (b._aberto) card.append(corpo(b, titulo));
 
   alca.onclick = (ev) => ev.stopPropagation();
@@ -634,7 +641,7 @@ function marcaCaixa(rotulo, valor, aoMudar, estrutural){
   return el("label", {class: "check"}, cx, rotulo);
 }
 
-const AJUDA_SELETOR = "Como achar o seletor: na página, clique com o botão direito no elemento → Inspecionar → no HTML que destacou, botão direito → Copy → Copy selector. Exemplos: #enviar · button.ok · [data-testid='send']";
+const AJUDA_SELETOR = "Como achar o seletor: na página, clique com o botão direito no elemento → Inspecionar → no HTML que destacou, botão direito → Copy → Copy selector. Exemplos: #enviar · button.ok · [data-testid='send']. Classes levam ponto e sem espaço: .btn.btn-primary (se você colar só o valor do atributo class, “btn btn-primary”, o Deck acerta os pontos sozinho).";
 
 /* editor de condição (usado por "Esperar" e por "Se") */
 function editorCondicao(c, atualizarTitulo){
@@ -1064,6 +1071,7 @@ const OPCOES = [
   ["popup_ao_trocar_modo", "Mostrar aviso ao alternar entre modo padrão e modo deck"],
   ["apitar_fora_do_deck", "Apitar ao apertar / * − no modo padrão (a tecla continua funcionando normalmente)"],
   ["restaurar_numlock_ao_sair", "Religar o Num Lock ao encerrar o programa"],
+  ["atualizar_ao_abrir", "Procurar versão nova no GitHub ao abrir e atualizar sozinho"],
 ];
 
 function montarOpcoes(){
@@ -1086,6 +1094,19 @@ function montarOpcoes(){
     catch (e) { auto.checked = !auto.checked; alert(e.message); }
   };
   lista.append(el("label", {class: "check"}, auto, "Iniciar junto com o Windows (em segundo plano)"));
+  const ver = el("div", {class: "evo-estado"}, "Versão do programa: " + (cfg.versao_programa === "dev" ? "desenvolvimento (não se atualiza sozinho)" : cfg.versao_programa));
+  const proc = el("button", {class: "btn sec", type: "button"}, "Procurar atualização agora");
+  proc.onclick = async () => {
+    proc.disabled = true; ver.className = "evo-estado"; ver.textContent = "Procurando…";
+    try {
+      const r = await api("/api/atualizar", {});
+      ver.className = "evo-estado bom";
+      ver.textContent = r.status === "atualizado" ? "Versão " + r.tag + " instalada. O programa vai reiniciar." :
+        r.status === "dev" ? "Esta cópia não é o .exe publicado; nada a atualizar." : "Você já está na versão mais recente (" + r.tag + ").";
+    } catch (e) { ver.className = "evo-estado mau"; ver.textContent = e.message; }
+    proc.disabled = false;
+  };
+  lista.append(ver, proc);
 }
 
 async function montarEvolution(){

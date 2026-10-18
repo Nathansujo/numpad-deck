@@ -10,9 +10,13 @@ import logging
 import logging.handlers
 import os
 import secrets
+import subprocess
 import sys
+import threading
+import time
 import urllib.request
 import webbrowser
+from pathlib import Path
 
 from configuracao import Config
 
@@ -50,6 +54,12 @@ def configurar_log(cfg: Config) -> None:
 
 def main() -> int:
     silencioso = "--silencioso" in sys.argv
+    if "--reiniciado" in sys.argv:    # acabou de se atualizar: espera o processo antigo largar a porta
+        porta_antiga = Config().opcoes()["porta"]
+        for _ in range(30):
+            if not ja_esta_rodando(porta_antiga):
+                break
+            time.sleep(0.3)
     cfg = Config()
     porta = cfg.opcoes()["porta"]
     url = f"http://127.0.0.1:{porta}/"
@@ -78,7 +88,33 @@ def main() -> int:
     plat = PlataformaWindows(ui, url, cfg.pasta)
     nucleo = NucleoDeck(cfg, plat)
     token = secrets.token_urlsafe(24)
-    app = criar_app(cfg, nucleo, ui, plat, token, porta)
+    estado = {"reiniciar": False}
+    exe = Path(sys.executable)
+    empacotado = bool(getattr(sys, "frozen", False))
+
+    def procurar_atualizacao(manual: bool = False) -> dict:
+        """Procura, baixa e instala a versão nova do GitHub (só no .exe). Reinicia o programa se atualizou."""
+        import atualizador
+        from versao import VERSAO
+
+        if not empacotado:
+            return {"status": "dev", "tag": VERSAO}
+        try:
+            r = atualizador.verificar_e_atualizar(
+                VERSAO, exe, ao_baixar=lambda tag: ui.toast("Atualizando o Numpad Deck", [f"Baixando a versão {tag}…"], 8000))
+        except atualizador.ErroAtualizacao as e:
+            logging.warning("Atualização: %s", e)
+            if manual:
+                raise
+            return {"status": "erro", "tag": VERSAO}
+        if r["status"] == "atualizado":
+            logging.info("Atualizado para %s", r["tag"])
+            ui.toast("Numpad Deck atualizado", [f"Versão {r['tag']} instalada. Reiniciando…"], 3000)
+            estado["reiniciar"] = True
+            threading.Timer(1.5, ui.sair).start()
+        return r
+
+    app = criar_app(cfg, nucleo, ui, plat, token, porta, atualizar=procurar_atualizacao)
     try:
         servidor = iniciar_servidor(app, porta)
     except OSError:
@@ -95,6 +131,13 @@ def main() -> int:
     else:
         logging.warning("Fora do Windows só o painel funciona (sem captura global de teclado).")
 
+    if empacotado:
+        import atualizador
+
+        atualizador.limpar_restos(exe)      # sobras da atualização anterior
+        if cfg.opcoes()["atualizar_ao_abrir"]:
+            threading.Thread(target=procurar_atualizacao, name="atualizador", daemon=True).start()
+
     ui.toast("Numpad Deck ativo", [f"Página {cfg.pagina_atual} · Num Lock apagado = modo deck"], 2500)
     if not silencioso:
         webbrowser.open(url)
@@ -106,6 +149,11 @@ def main() -> int:
             listener.stop()
         nucleo.encerrar()
         servidor.shutdown()
+    if estado["reiniciar"]:
+        # PYINSTALLER_RESET_ENVIRONMENT: o novo .exe desempacota na própria pasta temporária (a deste processo some ao sair)
+        subprocess.Popen([str(exe), *(["--silencioso"] if silencioso else []), "--reiniciado"], close_fds=True,
+                         env={**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"},
+                         creationflags=0x00000008 | 0x00000200 if IS_WIN else 0)
     return 0
 
 

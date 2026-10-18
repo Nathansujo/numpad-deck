@@ -439,6 +439,28 @@ class TestePaginasNomeadas(unittest.TestCase):
         self.assertEqual([p["numero"] for p in cfg.lista_paginas()], [1, 2, 4])
 
 
+class TesteSeletor(unittest.TestCase):
+    def test_classes_coladas_do_html_ganham_pontos(self):
+        from configuracao import corrigir_seletor
+        self.assertEqual(corrigir_seletor("btn btn-primary btn-block"), ".btn.btn-primary.btn-block")
+        self.assertEqual(corrigir_seletor("botao enviar"), ".botao.enviar")
+
+    def test_seletores_de_verdade_nao_mudam(self):
+        from configuracao import corrigir_seletor
+        for ok in ("#enviar", "button.ok", ".btn.btn-primary", "div span", "ul li", "[data-testid='send']",
+                   "form > button", "a:hover", "btn-primary", "input[name=x]", "div .caixa"):
+            self.assertEqual(corrigir_seletor(ok), ok, ok)
+
+    def test_vale_nos_blocos_e_nas_condicoes(self):
+        b = validar_bloco({"tipo": "web_clicar", "seletor": " btn btn-primary btn-block ", "aba": "", "limite": 10})
+        self.assertEqual(b["seletor"], ".btn.btn-primary.btn-block")
+        p = validar_bloco({"tipo": "pausa", "modo": "condicao", "ate": "aparecer", "limite": 30,
+                           "condicao": {"tipo": "pagina", "alvo": "seletor", "valor": "btn btn-primary"}})
+        self.assertEqual(p["condicao"]["valor"], ".btn.btn-primary")
+        t = validar_condicao({"tipo": "pagina", "alvo": "texto", "valor": "Entrar agora"})
+        self.assertEqual(t["valor"], "Entrar agora")                         # texto nunca é mexido
+
+
 class TesteValidacaoAvisos(unittest.TestCase):
     def test_popup_padrao(self):
         b = validar_bloco({"tipo": "aviso", "texto": "Terminou"})
