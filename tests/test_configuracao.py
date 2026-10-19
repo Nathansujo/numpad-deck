@@ -461,6 +461,104 @@ class TesteSeletor(unittest.TestCase):
         self.assertEqual(t["valor"], "Entrar agora")                         # texto nunca é mexido
 
 
+class TestePerguntasETextoDeArquivo(unittest.TestCase):
+    ESCOLHA = {"tipo": "perguntar", "nome": " Caminho ", "tipo_pergunta": "escolha", "titulo": "Qual?",
+               "opcoes": [{"nome": "Antiga", "descricao": "copia a nota"}, {"nome": "CNPJ"}, {"nome": "Do zero"}]}
+
+    def test_pergunta_de_escolha(self):
+        b = validar_bloco(self.ESCOLHA)
+        self.assertEqual((b["nome"], b["lembrar"], len(b["opcoes"])), ("caminho", "sempre", 3))
+        self.assertEqual(b["opcoes"][1], {"nome": "CNPJ", "descricao": ""})
+        self.assertIn("caminho entre 3", descrever_bloco(b))
+
+    def test_pergunta_invalida(self):
+        for ruim in ({**self.ESCOLHA, "opcoes": [{"nome": "só uma"}]},
+                     {**self.ESCOLHA, "opcoes": [{"nome": "a"}] * 9},
+                     {**self.ESCOLHA, "opcoes": [{"nome": ""}, {"nome": "b"}]},
+                     {**self.ESCOLHA, "nome": "Com Espaço"}, {**self.ESCOLHA, "nome": "data"},
+                     {**self.ESCOLHA, "tipo_pergunta": "foto"}, {**self.ESCOLHA, "lembrar": "talvez"},
+                     {**self.ESCOLHA, "titulo": ""}):
+            with self.assertRaises(ErroConfig):
+                validar_bloco(ruim)
+
+    def test_pergunta_de_texto_e_arquivo(self):
+        b = validar_bloco({"tipo": "perguntar", "nome": "cnpj", "tipo_pergunta": "texto", "titulo": "CNPJ?", "padrao": "00",
+                           "lembrar": "primeira_vez", "opcoes": [{"nome": "lixo"}]})
+        self.assertEqual((b["opcoes"], b["padrao"], b["lembrar"]), ([], "00", "primeira_vez"))
+
+    def test_condicao_resposta(self):
+        b = validar_bloco({"tipo": "se", "condicao": {"tipo": "resposta", "nome": "Caminho", "valor": " 2 "}, "entao": 1, "senao": 0})
+        self.assertEqual(b["condicao"], {"tipo": "resposta", "nome": "caminho", "valor": "2"})
+        self.assertIn('resposta {caminho} = "2"', descrever_bloco(b))
+        with self.assertRaises(ErroConfig):
+            validar_bloco({"tipo": "se", "condicao": {"tipo": "resposta", "nome": "x y", "valor": "1"}, "entao": 1})
+        with self.assertRaises(ErroConfig):
+            validar_bloco({"tipo": "se", "condicao": {"tipo": "resposta", "nome": "x", "valor": ""}, "entao": 1})
+
+    def test_caminhos_aninhados_validam_como_fluxo(self):
+        def se(v, e, s):
+            return {"tipo": "se", "condicao": {"tipo": "resposta", "nome": "caminho", "valor": v}, "entao": e, "senao": s}
+        ph = {"tipo": "texto", "texto": "x"}
+        fluxo = validar_fluxo([self.ESCOLHA, se("1", 1, 3), ph, se("2", 1, 1), ph, ph])
+        self.assertEqual(len(fluxo), 6)
+
+    def test_texto_de_arquivo(self):
+        b = validar_bloco({"tipo": "colar", "fonte": "arquivo", "arquivo": " C:\\x\\a.txt ", "texto": "ignorado"})
+        self.assertEqual((b["fonte"], b["arquivo"], b["perguntar"], b["texto"]), ("arquivo", "C:\\x\\a.txt", "nunca", ""))
+        self.assertRegex(b["chave"], r"^[a-z0-9]{8}$")
+        self.assertIn("a.txt", descrever_bloco(b))
+        b2 = validar_bloco({"tipo": "texto", "fonte": "arquivo", "perguntar": "primeira_vez", "chave": b["chave"]})
+        self.assertEqual((b2["arquivo"], b2["chave"]), ("", b["chave"]))
+        self.assertIn("1ª vez", descrever_bloco(b2))
+        with self.assertRaises(ErroConfig):
+            validar_bloco({"tipo": "colar", "fonte": "arquivo"})                 # fixo sem caminho
+        with self.assertRaises(ErroConfig):
+            validar_bloco({"tipo": "colar", "fonte": "arquivo", "arquivo": "a", "perguntar": "às vezes"})
+
+    def test_texto_continua_igual_sem_arquivo(self):
+        self.assertEqual(validar_bloco({"tipo": "colar", "texto": "oi", "fonte": "texto"}), {"tipo": "colar", "texto": "oi"})
+
+    def test_site_pagina_atual(self):
+        b = validar_bloco({"tipo": "site", "controlado": True, "destino": "atual", "url": ""})
+        self.assertEqual(b, {"tipo": "site", "url": "", "controlado": True, "destino": "atual"})
+        self.assertEqual(descrever_bloco(b), "Usar a página atual do navegador do Deck")
+        b = validar_bloco({"tipo": "site", "controlado": True, "destino": "atual", "url": "x.com/a"})
+        self.assertEqual(b["url"], "https://x.com/a")
+        with self.assertRaises(ErroConfig):
+            validar_bloco({"tipo": "site", "controlado": True, "url": ""})       # aba nova exige endereço
+        with self.assertRaises(ErroConfig):
+            validar_bloco({"tipo": "site", "controlado": True, "destino": "outra", "url": "x.com"})
+        # fora do navegador do Deck não existe "página atual": abre normal
+        self.assertNotIn("destino", validar_bloco({"tipo": "site", "controlado": False, "destino": "atual", "url": "x.com"}))
+        seg = validar_bloco({"tipo": "site", "controlado": True, "segundo_plano": True, "url": "x.com"})
+        self.assertTrue(seg["segundo_plano"])
+        self.assertIn("segundo plano", descrever_bloco(seg))
+
+
+class TesteBlocoDeNotasComWhatsapp(unittest.TestCase):
+    BASE = {"tipo": "aviso", "canal": "bloco_notas", "origem": "arquivo", "arquivo": "r.txt"}
+
+    def test_padrao_abre_e_nao_envia(self):
+        b = validar_bloco(dict(self.BASE))
+        self.assertEqual((b["abrir"], b["whatsapp"]), (True, None))
+
+    def test_envia_por_whatsapp(self):
+        b = validar_bloco({**self.BASE, "abrir": False, "whatsapp": {"numero": "+55 (77) 99183-1413", "modo": "evolution"}})
+        self.assertEqual(b["whatsapp"], {"numero": "5577991831413", "modo": "evolution", "espera": 10})
+        self.assertFalse(b["abrir"])
+        self.assertIn("WhatsApp 5577991831413", descrever_bloco(b))
+
+    def test_precisa_de_alguma_saida_e_numero_valido(self):
+        with self.assertRaises(ErroConfig):
+            validar_bloco({**self.BASE, "abrir": False})
+        with self.assertRaises(ErroConfig):
+            validar_bloco({**self.BASE, "whatsapp": {"numero": ""}})
+        with self.assertRaises(ErroConfig):
+            validar_bloco({**self.BASE, "whatsapp": {"numero": "5577991831413", "modo": "x"}})
+        with self.assertRaises(ErroConfig):
+            validar_bloco({**self.BASE, "abrir": "sim"})
+
+
 class TesteValidacaoAvisos(unittest.TestCase):
     def test_popup_padrao(self):
         b = validar_bloco({"tipo": "aviso", "texto": "Terminou"})

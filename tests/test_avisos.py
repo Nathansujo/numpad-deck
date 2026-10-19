@@ -294,6 +294,45 @@ class PlataformaAvisos(unittest.TestCase):
                                 "pasta": self.tmp.name})
         popen.assert_called_once_with(txt)
 
+    def test_texto_do_bloco_de_notas_vai_por_whatsapp_link(self):
+        txt = Path(self.tmp.name) / "lista.txt"
+        txt.write_text("Linha 1\nLinha 2 ação", encoding="utf-8")
+        ordem = []
+        with mock.patch.object(plataforma_win, "IS_WIN", True), \
+                mock.patch.object(plataforma_win.PlataformaWindows, "_abrir_no_bloco_de_notas") as popen, \
+                mock.patch("webbrowser.open", side_effect=lambda u: ordem.append(u)), \
+                mock.patch.object(plataforma_win.time, "sleep"), \
+                mock.patch.object(plataforma_win.PlataformaWindows, "_apertar_enter", side_effect=lambda: ordem.append("enter")):
+            self.plat.executar({"tipo": "aviso", "canal": "bloco_notas", "origem": "arquivo", "arquivo": "lista.txt",
+                                "pasta": self.tmp.name, "abrir": True,
+                                "whatsapp": {"numero": "5577991831413", "modo": "link", "espera": 3}})
+        self.assertEqual(ordem, ["https://wa.me/5577991831413?text=Linha%201%0ALinha%202%20a%C3%A7%C3%A3o", "enter"])
+        popen.assert_called_once_with(txt)
+
+    def test_texto_so_por_whatsapp_evolution_sem_abrir_bloco_de_notas(self):
+        txt = Path(self.tmp.name) / "lista.txt"
+        txt.write_bytes("Relatório pronto".encode("cp1252"))        # arquivo salvo em ANSI também funciona
+        self.plat.segredos.salvar("http://evo", "inst", "K")
+        with mock.patch.object(plataforma_win.PlataformaWindows, "_abrir_no_bloco_de_notas") as popen, \
+                mock.patch("avisos.enviar_whatsapp") as env:
+            self.plat.executar({"tipo": "aviso", "canal": "bloco_notas", "origem": "arquivo", "arquivo": "lista.txt",
+                                "pasta": self.tmp.name, "abrir": False,
+                                "whatsapp": {"numero": "5577991831413", "modo": "evolution"}})
+        env.assert_called_once_with("http://evo", "inst", "K", "5577991831413", "Relatório pronto")
+        popen.assert_not_called()
+
+    def test_texto_longo_e_cortado(self):
+        import avisos
+        txt = Path(self.tmp.name) / "g.txt"
+        txt.write_text("x" * 5000, encoding="utf-8")
+        curto = avisos.ler_texto_para_whatsapp(txt, "link")
+        self.assertLess(len(curto), 1400)
+        self.assertIn("cortado", curto)
+        self.assertLess(len(avisos.ler_texto_para_whatsapp(txt, "evolution")), 4000)
+        vazio = Path(self.tmp.name) / "v.txt"
+        vazio.write_text("  \n", encoding="utf-8")
+        self.assertEqual(avisos.ler_texto_para_whatsapp(vazio), "(sem conteúdo)")
+
     def test_bloco_de_notas_arquivo_inexistente(self):
         with mock.patch.object(plataforma_win, "IS_WIN", True), mock.patch.object(plataforma_win.PlataformaWindows, "_abrir_no_bloco_de_notas") as popen:
             with self.assertRaises(FileNotFoundError):

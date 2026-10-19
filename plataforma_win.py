@@ -93,7 +93,7 @@ class PlataformaWindows:
             self._abrir(bloco)
         elif tipo == "site":
             if bloco.get("controlado"):
-                self.navegador.abrir(bloco["url"])
+                self.navegador.abrir(bloco["url"], bloco.get("destino", "nova"), bloco.get("segundo_plano", False))
             else:
                 webbrowser.open(bloco["url"])
         elif tipo == "comando":
@@ -155,13 +155,36 @@ class PlataformaWindows:
             arquivo = avisos.resolver_arquivo(bloco, self.pasta_saidas)
             if not arquivo.is_file():
                 raise FileNotFoundError(f"Arquivo não encontrado: {arquivo}")
-        if not IS_WIN:
-            raise RuntimeError(f"O Bloco de Notas só existe no Windows (arquivo: {arquivo})")
-        self._abrir_no_bloco_de_notas(arquivo)
+        zap = bloco.get("whatsapp")
+        if zap:
+            self._enviar_arquivo_por_whatsapp(arquivo, zap)
+        if bloco.get("abrir", True):
+            if not IS_WIN:
+                raise RuntimeError(f"O Bloco de Notas só existe no Windows (arquivo: {arquivo})")
+            self._abrir_no_bloco_de_notas(arquivo)
+
+    def _enviar_arquivo_por_whatsapp(self, arquivo: Path, zap: dict) -> None:
+        texto = avisos.ler_texto_para_whatsapp(arquivo, zap.get("modo", "link"))
+        if zap.get("modo", "link") == "evolution":
+            self.enviar_whatsapp(zap["numero"], texto)
+        else:
+            self._whatsapp_link(zap["numero"], texto, zap.get("espera", 10))
 
     @staticmethod
     def _abrir_no_bloco_de_notas(arquivo: Path) -> None:
         subprocess.Popen(["notepad.exe", str(arquivo)])
+
+    def fotografar_html(self, html: str, seletores: list[str]) -> dict:
+        return self.navegador.fotografar_html(html, seletores)
+
+    def perguntar(self, b: dict):
+        """Abre a pergunta na tela e devolve a resposta (texto), ou None se a pessoa fechou."""
+        tipo = b["tipo_pergunta"]
+        if tipo == "texto":
+            return self.ui.perguntar_texto(b["titulo"], b.get("padrao", ""))
+        if tipo == "arquivo":
+            return self.ui.perguntar_arquivo(b["titulo"], b.get("padrao", ""))
+        return self.ui.perguntar_escolha(b["titulo"], b["opcoes"])
 
     # ------------------------------------------------------------ condições (Esperar / Se)
     def avaliar_condicao(self, c: dict) -> bool:

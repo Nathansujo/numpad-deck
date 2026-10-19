@@ -21,6 +21,21 @@ class PlataformaFalsa:
         self.avaliadas = []
         self.cor = "#00ff00"
 
+    def perguntar(self, b):
+        self.perguntas = getattr(self, "perguntas", []) + [b]
+        prontas = getattr(self, "respostas_prontas", [])
+        return prontas.pop(0) if prontas else None
+
+    def fotografar_html(self, html, seletores):
+        if getattr(self, "sem_foto", False):
+            raise RuntimeError("sem navegador")
+        import base64, io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new("RGB", (1280, 300), "white").save(buf, "PNG")
+        return {"png": buf.getvalue(), "altura": 300,
+                "retangulos": {s: {"achados": 1, "x": 10, "y": 10 + 40 * i, "w": 100, "h": 30} for i, s in enumerate(seletores)}}
+
     def avaliar_condicao(self, cond):
         self.avaliadas.append(cond)
         if callable(self.condicoes):
@@ -89,14 +104,14 @@ class UiFalsa:
         self.saiu = False
         self.area = {"x": 0.5, "y": 0.6, "l": 0.3, "a": 0.2}
 
-    def capturar_clique(self, timeout=60, mensagem=None):
+    def capturar_clique(self, timeout=60, mensagem=None, espera=0):
         self.mensagem = mensagem
         return self.clique
 
-    def capturar_area(self, timeout=120):
+    def capturar_area(self, timeout=120, espera=0):
         return self.area
 
-    def escolher_arquivo(self, timeout=300):
+    def escolher_arquivo(self, timeout=300, texto=False):
         return self.arquivo
 
     def escolher_pasta(self, timeout=300):

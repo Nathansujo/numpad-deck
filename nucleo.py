@@ -18,6 +18,7 @@ import queue
 import threading
 import time
 
+from pathlib import Path
 from urllib.parse import quote
 
 from configuracao import Config, aplicar_variaveis, descrever_condicao, normalizar_url, validar_fluxo
@@ -38,6 +39,11 @@ NAVEGACAO = {VK_DIVIDE: "voltar", VK_MULTIPLY: "avancar", VK_SUBTRACT: "perfil"}
 PROFUNDIDADE_MAX = 10          # quantas teclas podem chamar umas às outras em cadeia
 SEGUNDOS_PREVIA_TROCA = 3.5    # prévia que aparece ao trocar de página
 INTERVALO_CONDICAO = 0.25      # de quanto em quanto tempo "Esperar" confere a condição
+
+
+LIMITE_ARQUIVO_TEXTO = 1_000_000
+LIMITE_DIGITAR = 20_000       # digitar tecla por tecla é lento: passou disso, use "Colar"
+LIMITE_COLAR = 200_000
 
 
 class FluxoCancelado(Exception):
@@ -91,6 +97,7 @@ class NucleoDeck:
         self._suprimidas: set[tuple] = set()       # teclas cujo "soltar" também deve ser engolido
         self._padrao_apertadas: set[tuple] = set()  # evita apitar em repetição de tecla
         self._gravacao: GravacaoMacro | None = None
+        self._sessao: dict[str, str] = {}          # respostas dadas nesta execução do programa (valem mais que as lembradas)
 
     # ------------------------------------------------------------ ciclo de vida
     def iniciar(self) -> None:
@@ -306,7 +313,7 @@ class NucleoDeck:
                     self._executar_fluxo(corpo, pilha, geracao)
                 i += 1 + bloco["blocos"]
             elif tipo == "se":           # então = próximos K blocos; senão = os K2 seguintes
-                verdade = bool(self.p.avaliar_condicao(self._resolver_condicao(bloco["condicao"])))
+                verdade = bool(self._avaliar(self._resolver_condicao(bloco["condicao"])))
                 if bloco.get("negar"):
                     verdade = not verdade
                 k, k2 = bloco["entao"], bloco["senao"]
@@ -318,8 +325,18 @@ class NucleoDeck:
                 i += 1
 
     # -- textos com {variáveis} e condições
+    def _variaveis_texto(self) -> dict:
+        """Contadores + respostas lembradas + respostas desta execução (a mais nova vence)."""
+        return {**self.cfg.variaveis(), **self.cfg.respostas(), **self._sessao}
+
     def _resolver_texto(self, texto: str) -> str:
-        return aplicar_variaveis(texto, self.cfg.variaveis())
+        return aplicar_variaveis(texto, self._variaveis_texto())
+
+    def _avaliar(self, cond: dict) -> bool:
+        if cond["tipo"] == "resposta":      # compara com o que a pessoa respondeu num bloco Perguntar
+            atual = str(self._variaveis_texto().get(cond["nome"], "")).strip().lower()
+            return atual == str(cond["valor"]).strip().lower()
+        return bool(self.p.avaliar_condicao(cond))
 
     def _resolver_condicao(self, cond: dict) -> dict:
         saida = dict(cond)
@@ -332,7 +349,7 @@ class NucleoDeck:
         """Cópia do bloco com as {variáveis} trocadas pelos valores de agora."""
         campos = {"texto": ("texto",), "colar": ("texto",), "comando": ("comando",),
                   "abrir": ("argumentos",), "web_preencher": ("texto",), "whatsapp": ("mensagem",), "site": ("url",),
-                  "aviso": ("titulo", "texto", "arquivo", "pasta", "comando"),
+                  "aviso": ("titulo", "texto", "arquivo", "pasta", "comando"), "perguntar": ("titulo", "padrao"),
                   "clique": ("janela",), "mover": ("janela",)}
         resolvido = dict(bloco)
         for campo in campos.get(bloco["tipo"], ()):
@@ -347,7 +364,7 @@ class NucleoDeck:
         while True:
             if geracao != self._geracao:
                 raise FluxoCancelado()
-            presente = bool(self.p.avaliar_condicao(cond))
+            presente = self._avaliar(cond)
             if presente == (ate == "aparecer"):
                 return True
             restante = fim - time.monotonic()
@@ -380,9 +397,14 @@ class NucleoDeck:
             self.p.executar(self._resolver(bloco))
         elif tipo == "whatsapp":
             self.p.executar(self._bloco_whatsapp(self._resolver(bloco)))
+        elif tipo == "perguntar":
+            self._perguntar(self._resolver(bloco), geracao)
+        elif tipo in ("texto", "colar") and bloco.get("fonte") == "arquivo":
+            self.p.executar({"tipo": tipo, "texto": self._texto_do_arquivo(bloco, geracao)})
         elif tipo == "site":
             resolvido = self._resolver(bloco)
-            resolvido["url"] = normalizar_url(resolvido["url"])
+            if resolvido["url"] or resolvido.get("destino") != "atual":
+                resolvido["url"] = normalizar_url(resolvido["url"])
             self.p.executar(resolvido)
         elif tipo in ("web_clicar", "web_preencher"):
             cond = {"tipo": "pagina", "alvo": "seletor", "valor": bloco["seletor"], "aba": bloco["aba"]}
@@ -391,6 +413,58 @@ class NucleoDeck:
             self.p.executar(self._resolver(bloco))
         else:
             self.p.executar(self._resolver(bloco))
+
+    # -- perguntas na tela (texto, arquivo, caminho) e texto vindo de arquivo
+    def _depois_de_perguntar(self, geracao: int) -> None:
+        if geracao != self._geracao:
+            raise FluxoCancelado()
+
+    def _perguntar(self, b: dict, geracao: int) -> None:
+        nome = b["nome"]
+        if b["lembrar"] == "primeira_vez" and nome in self.cfg.respostas():
+            self._sessao[nome] = self.cfg.respostas()[nome]
+            return
+        valor = self.p.perguntar(b)
+        self._depois_de_perguntar(geracao)
+        if valor is None:                   # fechou a pergunta: desiste do fluxo sem erro
+            raise FluxoCancelado()
+        self._sessao[nome] = valor
+        if b["lembrar"] == "primeira_vez":
+            self.cfg.guardar_resposta(nome, valor)
+
+    def _texto_do_arquivo(self, bloco: dict, geracao: int) -> str:
+        quando, chave = bloco["perguntar"], "arq_" + bloco["chave"]
+        caminho = self._resolver_texto(bloco["arquivo"]).strip()
+        lembrado = self.cfg.respostas().get(chave, "")
+        if quando == "primeira_vez" and lembrado and Path(lembrado).is_file():
+            caminho = lembrado
+        elif quando != "nunca":
+            caminho = self.p.perguntar({"tipo": "perguntar", "nome": chave, "tipo_pergunta": "arquivo", "lembrar": "sempre",
+                                        "titulo": "Escolha o arquivo com o texto", "padrao": lembrado or caminho, "opcoes": []})
+            self._depois_de_perguntar(geracao)
+            if caminho is None:
+                raise FluxoCancelado()
+            if quando == "primeira_vez":
+                self.cfg.guardar_resposta(chave, caminho)
+        arquivo = Path(caminho)
+        if not arquivo.is_file():
+            raise ErroFluxo(f"Arquivo de texto não encontrado: {caminho}")
+        if arquivo.stat().st_size > LIMITE_ARQUIVO_TEXTO:
+            raise ErroFluxo("Arquivo de texto grande demais (máximo 1 MB).")
+        bruto = arquivo.read_bytes()
+        for codec in ("utf-8-sig", "cp1252"):
+            try:
+                texto = bruto.decode(codec)
+                break
+            except UnicodeDecodeError:
+                continue
+        texto = texto.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n")
+        limite = LIMITE_DIGITAR if bloco["tipo"] == "texto" else LIMITE_COLAR
+        if not texto.strip():
+            raise ErroFluxo(f"O arquivo está vazio: {caminho}")
+        if len(texto) > limite:
+            raise ErroFluxo(f"O texto do arquivo tem {len(texto)} letras; o máximo para {'digitar' if bloco['tipo'] == 'texto' else 'colar'} é {limite}.")
+        return texto
 
     @staticmethod
     def _bloco_whatsapp(b: dict) -> dict:

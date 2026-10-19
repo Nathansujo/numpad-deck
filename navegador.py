@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -87,9 +88,40 @@ class Navegador:
         except Exception:
             return False
 
+    def fotografar_html(self, html: str, seletores: list[str]) -> dict:
+        return fotografar_html(html, seletores, self.executavel, self.args_extra)
+
     # ------------------------------------------------------------ abrir
-    def abrir(self, url: str) -> None:
-        """Abre a página no navegador do Deck (aproveita ele se já estiver aberto)."""
+    def abrir(self, url: str, destino: str = "nova", segundo_plano: bool = False) -> None:
+        """Abre a página no navegador do Deck (aproveita ele se já estiver aberto).
+        destino "atual": usa a aba que já está aberta (só vai para `url` se ela foi informada), sem abrir outra.
+        segundo_plano: a aba nova abre sem passar na frente da que você está usando."""
+        if destino == "atual":
+            if not self.disponivel():
+                if not url:
+                    raise ErroNavegador("O navegador do Deck não está aberto. Abra-o antes (bloco \"Abrir site\" em aba nova).")
+            else:
+                if url:
+                    aba = self._escolher_aba("")
+                    if aba is not None:
+                        sessao = _Sessao(aba["webSocketDebuggerUrl"])
+                        try:
+                            sessao.chamar("Page.navigate", url=url)
+                        finally:
+                            sessao.fechar()
+                        return
+                else:
+                    return                      # nada a abrir: os próximos blocos usam a página que já está lá
+        if self.disponivel() and segundo_plano:
+            try:
+                sessao = _Sessao(self._http("/json/version")["webSocketDebuggerUrl"])
+                try:
+                    sessao.chamar("Target.createTarget", url=url, background=True)
+                finally:
+                    sessao.fechar()
+                return
+            except Exception:
+                pass                            # cai para a abertura normal abaixo
         if self.disponivel():
             try:
                 self._http("/json/new?" + urllib.parse.quote(url, safe=":/?&=#%@+,;~!*'()$[]"), "PUT", timeout=5)
@@ -194,3 +226,115 @@ class Navegador:
             "return true})()", aba)
         if not ok:
             raise ErroNavegador(f"Campo não encontrado na página: {seletor}")
+
+
+# ---------------------------------------------------------------- foto de um HTML colado (sem tocar no navegador do Deck)
+def _porta_livre() -> int:
+    import socket
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+class _Sessao:
+    """Conversa simples com uma aba pelo protocolo do Chrome (um comando por vez, ignora eventos)."""
+
+    def __init__(self, ws_url: str, timeout: float = 15.0):
+        import websocket
+
+        self.ws = websocket.create_connection(ws_url, timeout=timeout, suppress_origin=True)
+        self._id = 0
+
+    def chamar(self, metodo: str, **params):
+        self._id += 1
+        self.ws.send(json.dumps({"id": self._id, "method": metodo, "params": params}))
+        while True:
+            resp = json.loads(self.ws.recv())
+            if resp.get("id") == self._id:
+                break
+        if "error" in resp:
+            raise ErroNavegador(resp["error"].get("message", "Erro do navegador"))
+        return resp.get("result", {})
+
+    def js(self, expressao: str):
+        r = self.chamar("Runtime.evaluate", expression=expressao, returnByValue=True)
+        if "exceptionDetails" in r:
+            raise ErroNavegador("Erro ao medir a página.")
+        return r.get("result", {}).get("value")
+
+    def fechar(self):
+        try:
+            self.ws.close()
+        except Exception:
+            pass
+
+
+def fotografar_html(html: str, seletores: list[str], executavel: str | None = None, args_extra: tuple = (),
+                    largura: int = 1280, altura_max: int = 2600) -> dict:
+    """Desenha o HTML num Chrome/Edge temporário e invisível (perfil descartável, sem scripts) e devolve
+    {"png": bytes, "retangulos": {seletor: {x, y, w, h, achados}}, "altura": int}. Nada é executado nem salvo."""
+    exe = executavel or achar_navegador()
+    if not exe:
+        raise ErroNavegador("Não encontrei o Chrome nem o Edge instalados para desenhar a página.")
+    porta = _porta_livre()
+    pasta = Path(tempfile.mkdtemp(prefix="numpad-deck-foto-"))
+    proc = subprocess.Popen(
+        [exe, "--headless=new", f"--remote-debugging-port={porta}", "--remote-debugging-address=127.0.0.1",
+         f"--user-data-dir={pasta}", "--no-first-run", "--no-default-browser-check", "--disable-gpu",
+         "--hide-scrollbars", "--mute-audio", *args_extra, "about:blank"],
+        creationflags=CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    sessao = None
+    try:
+        base = f"http://127.0.0.1:{porta}"
+        alvo = None
+        for _ in range(60):
+            if proc.poll() is not None:
+                raise ErroNavegador("O navegador fechou sozinho ao tentar desenhar a página.")
+            try:
+                with urllib.request.urlopen(base + "/json/list", timeout=1) as r:
+                    abas = [a for a in json.load(r) if a.get("type") == "page" and a.get("webSocketDebuggerUrl")]
+                if abas:
+                    alvo = abas[0]
+                    break
+            except Exception:
+                pass
+            time.sleep(0.25)
+        if alvo is None:
+            raise ErroNavegador("O navegador não respondeu a tempo.")
+        sessao = _Sessao(alvo["webSocketDebuggerUrl"])
+        sessao.chamar("Page.enable")
+        sessao.chamar("Emulation.setScriptExecutionDisabled", value=True)
+        sessao.chamar("Emulation.setDeviceMetricsOverride", width=largura, height=800, deviceScaleFactor=1, mobile=False)
+        quadro = sessao.chamar("Page.getFrameTree")["frameTree"]["frame"]["id"]
+        csp = '<meta http-equiv="Content-Security-Policy" content="script-src \'none\'; frame-src \'none\'; object-src \'none\'">'
+        sessao.chamar("Page.setDocumentContent", frameId=quadro, html=csp + html)
+        for _ in range(40):                       # espera estilos e imagens carregarem (até ~4 s)
+            if sessao.js("document.readyState") == "complete":
+                break
+            time.sleep(0.1)
+        time.sleep(0.4)
+        medidas = sessao.js(
+            "(()=>{const sels=" + json.dumps(seletores) + ";const saida={};"
+            "for(const s of sels){try{const todos=document.querySelectorAll(s);const e=todos[0];"
+            "if(!e){saida[s]={achados:0};continue}"
+            "const r=e.getBoundingClientRect();saida[s]={achados:todos.length,x:Math.round(r.left+scrollX),"
+            "y:Math.round(r.top+scrollY),w:Math.round(r.width),h:Math.round(r.height)}}"
+            "catch(_){saida[s]={achados:-1}}}"
+            "return {altura:Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0),retangulos:saida}})()")
+        altura = max(200, min(int(medidas["altura"]), altura_max))
+        foto = sessao.chamar("Page.captureScreenshot", format="png", captureBeyondViewport=True,
+                             clip={"x": 0, "y": 0, "width": largura, "height": altura, "scale": 1})
+        import base64
+
+        return {"png": base64.b64decode(foto["data"]), "retangulos": medidas["retangulos"], "altura": altura}
+    finally:
+        if sessao is not None:
+            sessao.fechar()
+        proc.terminate()
+        try:
+            proc.wait(5)
+        except Exception:
+            proc.kill()
+        shutil.rmtree(pasta, ignore_errors=True)

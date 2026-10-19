@@ -22,7 +22,7 @@ jobs:
         run: python -m pip install -r requirements.txt pyinstaller
       - name: Testes (se algum falhar, o .exe sai mesmo assim; veja o log)
         continue-on-error: true
-        run: python -m unittest tests.test_configuracao tests.test_nucleo tests.test_servidor tests.test_avisos tests.test_posicao tests.test_atualizador
+        run: python -m unittest tests.test_configuracao tests.test_nucleo tests.test_servidor tests.test_avisos tests.test_posicao tests.test_atualizador tests.test_analisehtml
       - name: Gravar o numero da versao no programa (para a atualizacao automatica)
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash

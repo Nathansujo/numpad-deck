@@ -107,6 +107,41 @@ class TesteApi(unittest.TestCase):
         self.assertEqual(self.post("/api/pagina", {"renomear": 5}).status_code, 400)
         self.assertEqual(self.post("/api/pagina", {"renomear": {"pagina": 1, "nome": "x" * 40}}).status_code, 400)
 
+    # -- respostas lembradas
+    def test_esquecer_respostas(self):
+        self.cfg.guardar_resposta("caminho", "2")
+        self.cfg.guardar_resposta("cnpj", "123")
+        self.assertEqual(self.get("/api/config", headers=H).get_json()["respostas"], {"caminho": "2", "cnpj": "123"})
+        self.assertEqual(self.post("/api/respostas", {"esquecer": "caminho"}).get_json()["respostas"], {"cnpj": "123"})
+        self.assertEqual(self.post("/api/respostas", {}).status_code, 400)
+        self.assertEqual(self.post("/api/respostas", {"esquecer_tudo": True}).get_json()["respostas"], {})
+
+    # -- analisar o HTML colado
+    def test_analisar_html_lista_e_foto(self):
+        html = '<form><input id="u" placeholder="Usuário"><button id="ok">Entrar</button><script>x()</script></form>'
+        r = self.post("/api/analisar-html", {"html": html})
+        self.assertEqual(r.status_code, 200)
+        d = r.get_json()
+        self.assertEqual([e["seletor"] for e in d["elementos"]], ["#u", "#ok"])
+        self.assertTrue(d["imagem"].startswith("data:image/jpeg;base64,"))
+        self.assertIsNone(d["aviso"])
+        self.assertEqual(d["elementos"][0]["achados"], 1)
+        self.assertNotIn("rect", d["elementos"][0])
+
+    def test_analisar_html_sem_navegador_ainda_lista(self):
+        self.plat.sem_foto = True
+        d = self.post("/api/analisar-html", {"html": '<button id="ok">Entrar</button>'}).get_json()
+        self.assertEqual(len(d["elementos"]), 1)
+        self.assertIsNone(d["imagem"])
+        self.assertIn("não consegui desenhar", d["aviso"])
+
+    def test_analisar_html_vazio_ou_sem_elementos(self):
+        self.assertEqual(self.post("/api/analisar-html", {"html": "  "}).status_code, 400)
+        self.assertEqual(self.post("/api/analisar-html", {"html": 5}).status_code, 400)
+        d = self.post("/api/analisar-html", {"html": "<p>nada</p>"}).get_json()
+        self.assertEqual(d["elementos"], [])
+        self.assertIn("Não achei", d["aviso"])
+
     # -- clique relativo à janela
     def test_capturar_clique_na_tela_nao_procura_janela(self):
         self.assertEqual(self.post("/api/capturar-clique").get_json(), {"x": 120, "y": 340})

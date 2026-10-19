@@ -626,5 +626,153 @@ class GravacaoDeMacro(Base):
         t.join(2)
 
 
+PERGUNTA_CAMINHO = {"tipo": "perguntar", "nome": "caminho", "tipo_pergunta": "escolha", "titulo": "Qual caminho?", "lembrar": "sempre",
+                    "padrao": "", "opcoes": [{"nome": "Nota antiga", "descricao": "copia"}, {"nome": "CNPJ", "descricao": ""},
+                                             {"nome": "Do zero", "descricao": ""}]}
+
+
+def se_resposta(valor, entao=1, senao=0):
+    return {"tipo": "se", "condicao": {"tipo": "resposta", "nome": "caminho", "valor": valor}, "entao": entao, "senao": senao}
+
+
+def txt(t):
+    return {"tipo": "texto", "texto": t}
+
+
+class PerguntasECaminhos(Base):
+    numlock = False
+
+    def rodar(self, fluxo):
+        self.cfg.definir_tecla(1, "5", "", None, fluxo)
+        self.aperta(NUM5_DECK)
+
+    def textos(self):
+        return [b["texto"] for b in self.plat.executadas]
+
+    # se caminho = 1: A, senão (se caminho = 2: B, senão C)
+    CAMINHOS = [PERGUNTA_CAMINHO, se_resposta("1", 1, 3), txt("A"), se_resposta("2", 1, 1), txt("B"), txt("C"), txt("fim")]
+
+    def test_cada_resposta_segue_o_seu_caminho(self):
+        for resposta, esperado in (("1", ["A", "fim"]), ("2", ["B", "fim"]), ("3", ["C", "fim"])):
+            self.plat.executadas.clear()
+            self.plat.respostas_prontas = [resposta]
+            self.rodar(self.CAMINHOS)
+            self.assertEqual(self.textos(), esperado)
+        self.assertEqual(self.plat.perguntas[0]["opcoes"][2]["nome"], "Do zero")
+
+    def test_fechar_a_pergunta_cancela_o_fluxo(self):
+        self.plat.respostas_prontas = [None]
+        self.rodar(self.CAMINHOS)
+        self.assertEqual(self.plat.executadas, [])
+
+    def test_resposta_vira_variavel_no_texto(self):
+        self.plat.respostas_prontas = ["12.345.678/0001-90"]
+        self.plat.condicoes = [True]
+        self.rodar([{"tipo": "perguntar", "nome": "cnpj", "tipo_pergunta": "texto", "titulo": "CNPJ de {data}?", "lembrar": "sempre",
+                     "padrao": "", "opcoes": []},
+                    {"tipo": "web_preencher", "seletor": "#cnpj", "texto": "{cnpj}", "aba": "", "limite": 1}])
+        self.assertEqual(self.plat.perguntas[0]["titulo"].startswith("CNPJ de "), True)
+        self.assertEqual(self.plat.executadas[-1]["texto"], "12.345.678/0001-90")
+
+    def test_primeira_vez_lembra_e_nao_pergunta_de_novo(self):
+        fluxo = [{**PERGUNTA_CAMINHO, "lembrar": "primeira_vez"}, se_resposta("2", 1, 1), txt("dois"), txt("outro")]
+        self.plat.respostas_prontas = ["2"]
+        self.rodar(fluxo)
+        self.aperta(NUM5_DECK)
+        self.assertEqual(len(self.plat.perguntas), 1)                  # só perguntou na primeira
+        self.assertEqual(self.textos(), ["dois", "dois"])
+        self.assertEqual(self.cfg.respostas(), {"caminho": "2"})
+        self.cfg.esquecer_respostas("caminho")                          # "esquecer" faz perguntar de novo
+        self.plat.respostas_prontas = ["1"]
+        self.aperta(NUM5_DECK)
+        self.assertEqual(len(self.plat.perguntas), 2)
+
+    def test_resposta_lembrada_sobrevive_ao_reabrir(self):
+        self.cfg.guardar_resposta("caminho", "3")
+        self.assertEqual(Config(self.tmp.name).respostas(), {"caminho": "3"})
+
+    def test_sempre_pergunta_toda_vez(self):
+        self.plat.respostas_prontas = ["1", "2"]
+        self.rodar(self.CAMINHOS)
+        self.aperta(NUM5_DECK)
+        self.assertEqual(self.textos(), ["A", "fim", "B", "fim"])
+        self.assertEqual(self.cfg.respostas(), {})
+
+
+class TextoDeArquivo(Base):
+    numlock = False
+
+    def setUp(self):
+        super().setUp()
+        self.arq = Path(self.tmp.name) / "texto.txt"
+        self.arq.write_bytes("Linha 1\r\nAção ñ\r\n".encode("cp1252"))
+
+    def rodar(self, fluxo):
+        self.cfg.definir_tecla(1, "5", "", None, fluxo)
+        self.aperta(NUM5_DECK)
+
+    def bloco(self, **kw):
+        return {"tipo": "colar", "fonte": "arquivo", "arquivo": str(self.arq), "perguntar": "nunca", "chave": "abcd1234", **kw}
+
+    def test_arquivo_fixo(self):
+        self.rodar([self.bloco()])
+        self.assertEqual(self.plat.executadas, [{"tipo": "colar", "texto": "Linha 1\nAção ñ"}])
+
+    def test_arquivo_com_variavel_no_caminho(self):
+        self.cfg.aplicar_variavel("n", "definir", 7)
+        self.arq.rename(Path(self.tmp.name) / "texto7.txt")
+        self.rodar([self.bloco(arquivo=str(Path(self.tmp.name) / "texto{n}.txt"))])
+        self.assertEqual(self.plat.executadas[0]["texto"], "Linha 1\nAção ñ")
+
+    def test_pergunta_o_arquivo_na_primeira_vez_e_depois_lembra(self):
+        self.plat.respostas_prontas = [str(self.arq)]
+        fluxo = [self.bloco(arquivo="", perguntar="primeira_vez", tipo="texto")]
+        self.rodar(fluxo)
+        self.aperta(NUM5_DECK)
+        self.assertEqual(len(self.plat.perguntas), 1)
+        self.assertEqual(self.plat.perguntas[0]["tipo_pergunta"], "arquivo")
+        self.assertEqual(self.cfg.respostas(), {"arq_abcd1234": str(self.arq)})
+        self.assertEqual([b["tipo"] for b in self.plat.executadas], ["texto", "texto"])
+
+    def test_arquivo_lembrado_que_sumiu_pergunta_de_novo(self):
+        self.cfg.guardar_resposta("arq_abcd1234", str(Path(self.tmp.name) / "sumiu.txt"))
+        self.plat.respostas_prontas = [str(self.arq)]
+        self.rodar([self.bloco(arquivo="", perguntar="primeira_vez")])
+        self.assertEqual(self.plat.executadas[0]["texto"], "Linha 1\nAção ñ")
+        self.assertEqual(self.cfg.respostas()["arq_abcd1234"], str(self.arq))
+
+    def test_sempre_pergunta_e_nao_guarda(self):
+        self.plat.respostas_prontas = [str(self.arq)]
+        self.rodar([self.bloco(arquivo="", perguntar="sempre")])
+        self.assertEqual(self.cfg.respostas(), {})
+        self.assertEqual(len(self.plat.executadas), 1)
+
+    def test_cancelar_a_escolha_do_arquivo(self):
+        self.plat.respostas_prontas = [None]
+        self.rodar([self.bloco(arquivo="", perguntar="sempre")])
+        self.assertEqual(self.plat.executadas, [])
+
+    def test_arquivo_inexistente_ou_vazio_ou_grande_para_digitar(self):
+        for conteudo, trecho in ((None, "não encontrado"), (b"  \n", "vazio"), (b"x" * 25000, "máximo para digitar")):
+            if conteudo is None:
+                self.arq.unlink()
+            else:
+                self.arq.write_bytes(conteudo)
+            self.plat.executadas.clear()
+            with self.assertRaisesRegex(Exception, trecho):      # na thread real vira apito + aviso
+                self.rodar([self.bloco(tipo="texto")])
+            self.tecla(NUM5_DECK, UP)        # o erro interrompeu o "soltar" da tecla
+            self.assertEqual(self.plat.executadas, [])
+
+
+class SiteNaPaginaAtual(Base):
+    numlock = False
+
+    def test_pagina_atual_sem_endereco_nao_exige_url(self):
+        self.cfg.definir_tecla(1, "5", "", None, [{"tipo": "site", "url": "", "controlado": True, "destino": "atual"}])
+        self.aperta(NUM5_DECK)
+        self.assertEqual(self.plat.executadas, [{"tipo": "site", "url": "", "controlado": True, "destino": "atual"}])
+
+
 if __name__ == "__main__":
     unittest.main()

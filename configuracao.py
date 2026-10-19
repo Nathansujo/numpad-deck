@@ -43,7 +43,7 @@ LIMITES_INT = {"porta": (1024, 65535), "perfil_segundos": (2, 120)}
 ANCORAS_JANELA = ("proporcional", "topo_esq", "topo_dir", "baixo_esq", "baixo_dir")
 TIPOS_BLOCO = ("atalho", "texto", "colar", "clique", "mover", "rolagem", "pausa", "repetir", "se", "variavel",
                "abrir", "site", "comando", "whatsapp", "web_clicar", "web_preencher",
-               "midia", "captura", "sistema", "chamar", "ir_pagina", "aviso")
+               "midia", "captura", "sistema", "chamar", "ir_pagina", "aviso", "perguntar")
 BOTOES = ("esquerdo", "direito", "meio")
 MIDIA = {"volume_mais": "Volume +", "volume_menos": "Volume −", "mudo": "Mudo / som",
          "play_pausa": "Play / Pausa", "proxima": "Próxima faixa", "anterior": "Faixa anterior"}
@@ -59,6 +59,12 @@ VARIAVEL_NO_TEXTO_RE = re.compile(r"\{([a-z_][a-z0-9_]{0,19})\}")
 COR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 LIMITE_PAGINA = 100000
 VARIAVEIS_RESERVADAS = ("data", "hora", "dataiso")
+CHAVE_RESPOSTA_RE = re.compile(r"^[a-z_][a-z0-9_]{0,23}$")
+CHAVE_ARQUIVO_RE = re.compile(r"^[a-z0-9]{4,16}$")
+PERGUNTAR_QUANDO = ("nunca", "primeira_vez", "sempre")
+TIPOS_PERGUNTA = ("texto", "arquivo", "escolha")
+MAX_OPCOES_ESCOLHA = 8
+LIMITE_RESPOSTA = 2000
 LIMITE_VARIAVEL = 10**9
 
 
@@ -149,6 +155,12 @@ def validar_condicao(c) -> dict:
         valor = _texto(c.get("valor"), 1, 300, "Escreva o seletor ou o texto a procurar na página.").strip()
         return {"tipo": tipo, "alvo": alvo, "valor": corrigir_seletor(valor) if alvo == "seletor" else valor,
                 "aba": _opcional(c.get("aba"), 100, "Filtro de aba inválido.")}
+    if tipo == "resposta":
+        nome = c.get("nome")
+        nome = nome.strip().lower() if isinstance(nome, str) else ""
+        if not NOME_VARIAVEL_RE.match(nome):
+            raise ErroConfig("Nome da resposta: o mesmo nome usado no bloco Perguntar.")
+        return {"tipo": tipo, "nome": nome, "valor": _texto(c.get("valor"), 1, 100, "Escreva o valor esperado (ex.: 1).").strip()}
     raise ErroConfig("Escolha o tipo de condição.")
 
 
@@ -160,6 +172,8 @@ def descrever_condicao(c: dict) -> str:
         return f"cor {c['cor']} em ({c['x']}, {c['y']})"
     if t == "pagina":
         return f"elemento {c['valor']} na página" if c["alvo"] == "seletor" else f'texto "{c["valor"]}" na página'
+    if t == "resposta":
+        return f'resposta {{{c["nome"]}}} = "{c["valor"]}"'
     return "condição"
 
 
@@ -189,11 +203,15 @@ def validar_bloco(bloco) -> dict:
             saida.append({"vk": vk, "nome": str(item.get("nome") or nome_vk(vk))[:30]})
         return {"tipo": tipo, "teclas": saida}
 
-    if tipo == "texto":
-        return {"tipo": tipo, "texto": _texto(bloco.get("texto"), 1, 2000, "Escreva o texto a digitar (até 2000 letras).")}
-
-    if tipo == "colar":
+    if tipo in ("texto", "colar"):
+        if bloco.get("fonte", "texto") == "arquivo":
+            return _validar_texto_de_arquivo(bloco)
+        if tipo == "texto":
+            return {"tipo": tipo, "texto": _texto(bloco.get("texto"), 1, 2000, "Escreva o texto a digitar (até 2000 letras).")}
         return {"tipo": tipo, "texto": _texto(bloco.get("texto"), 1, 5000, "Escreva o texto a colar (até 5000 letras).")}
+
+    if tipo == "perguntar":
+        return _validar_pergunta(bloco)
 
     if tipo in ("clique", "mover"):
         saida = {"tipo": tipo, **_validar_posicao(bloco)}
@@ -259,7 +277,17 @@ def validar_bloco(bloco) -> dict:
         return {"tipo": tipo, "caminho": caminho, "argumentos": argumentos.strip()}
 
     if tipo == "site":
-        return {"tipo": tipo, "url": _url(bloco.get("url")), "controlado": bool(bloco.get("controlado", False))}
+        controlado = bool(bloco.get("controlado", False))
+        atual = controlado and bloco.get("destino", "nova") == "atual"
+        if bloco.get("destino", "nova") not in ("nova", "atual"):
+            raise ErroConfig("Escolha abrir numa aba nova ou usar a página atual.")
+        url = _url(bloco.get("url")) if (not atual or str(bloco.get("url") or "").strip()) else ""
+        saida = {"tipo": tipo, "url": url, "controlado": controlado}
+        if atual:
+            saida["destino"] = "atual"
+        elif controlado and bool(bloco.get("segundo_plano", False)):
+            saida["segundo_plano"] = True       # a aba nova abre sem tirar a que você está usando da frente
+        return saida
 
     if tipo == "comando":
         shell = bloco.get("shell", "powershell")
@@ -395,6 +423,58 @@ def _validar_area(area) -> dict:
     return saida
 
 
+def _validar_texto_de_arquivo(bloco: dict) -> dict:
+    """Digitar/Colar com o texto vindo de um arquivo (fixo, ou perguntado na primeira vez / toda vez)."""
+    quando = bloco.get("perguntar", "nunca")
+    if quando not in PERGUNTAR_QUANDO:
+        raise ErroConfig("Escolha quando perguntar o arquivo.")
+    arquivo = _opcional(bloco.get("arquivo"), 500, "Caminho do arquivo inválido.").strip()
+    if quando == "nunca" and not arquivo:
+        raise ErroConfig("Informe o arquivo de onde importar o texto (ou escolha perguntar ao executar).")
+    chave = bloco.get("chave")
+    if not (isinstance(chave, str) and CHAVE_ARQUIVO_RE.match(chave)):
+        chave = uuid.uuid4().hex[:8]
+    return {"tipo": bloco["tipo"], "fonte": "arquivo", "texto": "", "arquivo": arquivo, "perguntar": quando, "chave": chave}
+
+
+def _validar_pergunta(bloco: dict) -> dict:
+    nome = bloco.get("nome")
+    nome = nome.strip().lower() if isinstance(nome, str) else ""
+    if not NOME_VARIAVEL_RE.match(nome) or nome in VARIAVEIS_RESERVADAS:
+        raise ErroConfig("Nome da resposta: letras minúsculas, números e _ (até 20), sem espaços.")
+    tipo = bloco.get("tipo_pergunta", "texto")
+    if tipo not in TIPOS_PERGUNTA:
+        raise ErroConfig("Escolha o que perguntar: texto, arquivo ou caminho.")
+    lembrar = bloco.get("lembrar", "sempre")
+    if lembrar not in ("sempre", "primeira_vez"):
+        raise ErroConfig("Escolha perguntar sempre ou só na primeira vez.")
+    saida = {"tipo": "perguntar", "nome": nome, "tipo_pergunta": tipo, "lembrar": lembrar,
+             "titulo": _texto(bloco.get("titulo"), 1, 120, "Escreva a pergunta que aparece na tela (até 120 letras)."),
+             "padrao": _opcional(bloco.get("padrao"), 200, "Texto sugerido muito longo (até 200 letras)."), "opcoes": []}
+    if tipo == "escolha":
+        brutas = bloco.get("opcoes")
+        if not isinstance(brutas, list) or not 2 <= len(brutas) <= MAX_OPCOES_ESCOLHA:
+            raise ErroConfig(f"Informe de 2 a {MAX_OPCOES_ESCOLHA} caminhos.")
+        for item in brutas:
+            item = item if isinstance(item, dict) else {}
+            saida["opcoes"].append({"nome": _texto(item.get("nome"), 1, 40, "Dê um nome a cada caminho (até 40 letras)."),
+                                    "descricao": _opcional(item.get("descricao"), 300, "Descrição do caminho muito longa (até 300 letras).")})
+    return saida
+
+
+def _validar_zap_do_texto(zap) -> dict | None:
+    """Envio do conteúdo do TXT por WhatsApp (None = não envia)."""
+    if zap is None or zap is False:
+        return None
+    if not isinstance(zap, dict):
+        raise ErroConfig("Envio por WhatsApp inválido.")
+    modo = zap.get("modo", "link")
+    if modo not in ("link", "evolution"):
+        raise ErroConfig("Escolha como enviar o WhatsApp: link (wa.me) ou Evolution API.")
+    return {"numero": _numero_whatsapp(zap.get("numero"), True), "modo": modo,
+            "espera": _inteiro(zap.get("espera", 10), 1, 120, "Tempo de espera antes do Enter: de 1 a 120 segundos.")}
+
+
 def _validar_aviso(bloco: dict) -> dict:
     canal = bloco.get("canal", "popup")
     if canal == "popup":
@@ -424,7 +504,14 @@ def _validar_aviso(bloco: dict) -> dict:
             raise ErroConfig("Escolha o que abrir no Bloco de Notas.")
         arquivo = _opcional(bloco.get("arquivo"), 500, "Nome do arquivo inválido.")
         pasta = _opcional(bloco.get("pasta"), 500, "Pasta inválida.")
-        saida = {"tipo": "aviso", "canal": "bloco_notas", "origem": origem, "arquivo": arquivo, "pasta": pasta}
+        abrir = bloco.get("abrir", True)
+        if not isinstance(abrir, bool):
+            raise ErroConfig("Valor inválido em \"abrir no Bloco de Notas\".")
+        zap = _validar_zap_do_texto(bloco.get("whatsapp"))
+        if not abrir and zap is None:
+            raise ErroConfig("Marque pelo menos uma saída: abrir no Bloco de Notas ou enviar por WhatsApp.")
+        saida = {"tipo": "aviso", "canal": "bloco_notas", "origem": origem, "arquivo": arquivo, "pasta": pasta,
+                 "abrir": abrir, "whatsapp": zap}
         if origem == "arquivo":
             if not arquivo:
                 raise ErroConfig("Informe o arquivo de texto que será aberto.")
@@ -529,6 +616,13 @@ def descrever_bloco(b: dict) -> str:
     t = b["tipo"]
     if t == "atalho":
         return "Atalho: " + " + ".join(x["nome"] for x in b["teclas"])
+    if t in ("texto", "colar") and b.get("fonte") == "arquivo":
+        origem = {"nunca": _nome_arquivo(b["arquivo"]), "primeira_vez": "arquivo (pergunta na 1ª vez)",
+                  "sempre": "arquivo (pergunta toda vez)"}[b["perguntar"]]
+        return ("Digitar" if t == "texto" else "Colar") + f" o texto de: {origem}"
+    if t == "perguntar":
+        o = {"texto": "texto", "arquivo": "arquivo", "escolha": f"caminho entre {len(b['opcoes'])}"}[b["tipo_pergunta"]]
+        return f'Perguntar {o}: "{_curto(b["titulo"], 28)}" → {{{b["nome"]}}}'
     if t == "texto":
         return f'Digitar: "{_curto(b["texto"])}"'
     if t == "colar":
@@ -560,7 +654,10 @@ def descrever_bloco(b: dict) -> str:
     if t == "abrir":
         return "Abrir: " + _nome_arquivo(b["caminho"]) + (f" {b['argumentos']}" if b.get("argumentos") else "")
     if t == "site":
-        return "Abrir site: " + (urlparse(b["url"]).netloc or b["url"]) + (" (navegador do Deck)" if b.get("controlado") else "")
+        if b.get("destino") == "atual":
+            return "Usar a página atual do navegador do Deck" + (f" e ir para {urlparse(b['url']).netloc or b['url']}" if b["url"] else "")
+        return ("Abrir site: " + (urlparse(b["url"]).netloc or b["url"]) + (" (navegador do Deck" + (", em segundo plano)" if b.get("segundo_plano") else ")")
+                if b.get("controlado") else ""))
     if t == "comando":
         return f'{"PowerShell" if b["shell"] == "powershell" else "CMD"}: {_curto(b["comando"])}'
     if t == "whatsapp":
@@ -584,9 +681,12 @@ def descrever_bloco(b: dict) -> str:
         if canal == "whatsapp":
             return f'Avisar no WhatsApp ({b["numero"]}): "{_curto(b["texto"], 30)}"'
         if canal == "bloco_notas":
-            if b["origem"] == "arquivo":
-                return "Bloco de Notas: " + _nome_arquivo(b["arquivo"])
-            return "Bloco de Notas com a saída de: " + _curto(b["comando"], 30)
+            base = ("Bloco de Notas: " + _nome_arquivo(b["arquivo"])) if b["origem"] == "arquivo" \
+                else "Bloco de Notas com a saída de: " + _curto(b["comando"], 30)
+            zap = b.get("whatsapp")
+            if zap:
+                base = (base if b.get("abrir", True) else base.replace("Bloco de Notas", "Texto", 1)) + f" → WhatsApp {zap['numero']}"
+            return base
         return f'Aviso: "{_curto(b["texto"], 30)}"'
     return "Bloco vazio"
 
@@ -614,9 +714,13 @@ def rotulo_bloco(b: dict) -> str:
         return "Se…"
     if t == "variavel":
         return f"{{{b['nome']}}}"
+    if t == "perguntar":
+        return "Perguntar"
     if t == "abrir":
         return _nome_arquivo(b["caminho"])
     if t == "site":
+        if b.get("destino") == "atual" and not b["url"]:
+            return "Página atual"
         return (urlparse(b["url"]).netloc or b["url"]).removeprefix("www.")
     if t == "comando":
         return "Comando"
@@ -732,7 +836,7 @@ class Config:
     @staticmethod
     def _padrao() -> dict:
         return {"pagina_atual": 1, "opcoes": dict(OPCOES_PADRAO), "paginas": {}, "variaveis": {},
-                "nomes_paginas": {}, "paginas_criadas": []}
+                "nomes_paginas": {}, "paginas_criadas": [], "respostas": {}}
 
     def _carregar(self) -> dict:
         if not self.arquivo.exists():
@@ -769,6 +873,11 @@ class Config:
                 if (isinstance(nome, str) and NOME_VARIAVEL_RE.match(nome) and isinstance(valor, int)
                         and not isinstance(valor, bool) and abs(valor) <= LIMITE_VARIAVEL):
                     dados["variaveis"][nome] = valor
+        respostas = bruto.get("respostas")
+        if isinstance(respostas, dict):
+            for nome, valor in respostas.items():
+                if isinstance(nome, str) and CHAVE_RESPOSTA_RE.match(nome) and isinstance(valor, str) and len(valor) <= LIMITE_RESPOSTA:
+                    dados["respostas"][nome] = valor
         nomes = bruto.get("nomes_paginas")
         if isinstance(nomes, dict):
             for numero, nome in nomes.items():
@@ -980,6 +1089,29 @@ class Config:
                 self._salvar()
             return novo
 
+    # -- respostas lembradas (blocos Perguntar e arquivos escolhidos na 1ª vez)
+    def respostas(self) -> dict:
+        with self._lock:
+            return dict(self._dados["respostas"])
+
+    def guardar_resposta(self, nome: str, valor: str) -> None:
+        if not CHAVE_RESPOSTA_RE.match(nome) or not isinstance(valor, str) or len(valor) > LIMITE_RESPOSTA:
+            raise ErroConfig("Resposta inválida.")
+        with self._lock:
+            if self._dados["respostas"].get(nome) != valor:
+                self._dados["respostas"][nome] = valor
+                self._salvar()
+
+    def esquecer_respostas(self, nome: str | None = None) -> None:
+        with self._lock:
+            if nome is None:
+                mudou = bool(self._dados["respostas"])
+                self._dados["respostas"] = {}
+            else:
+                mudou = self._dados["respostas"].pop(nome, None) is not None
+            if mudou:
+                self._salvar()
+
     # -- opções
     def opcoes(self) -> dict:
         with self._lock:
@@ -1051,5 +1183,6 @@ class Config:
                 "teclas": teclas,
                 "opcoes": self.opcoes(),
                 "variaveis": self.variaveis(),
+                "respostas": self.respostas(),
                 "paginas_configuradas": self.paginas_configuradas(),
             }

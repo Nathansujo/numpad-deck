@@ -121,6 +121,25 @@ O painel abre no navegador (`http://127.0.0.1:5077`). O programa continua rodand
 - Abrir o `.exe` mostra o painel (se já estiver rodando, só abre o painel).
 - Em *Opções*, marque **Iniciar junto com o Windows** para ele subir sozinho em segundo plano.
 
+## Marcar um ponto na tela (clique, cor, área do aviso)
+
+Ao pedir para marcar o ponto, aparece um aviso de 5 segundos com a contagem: use esse tempo para trocar de aba ou janela e deixar a tela como ela deve estar. Quando a contagem termina, a tela inteira fica escura e transparente e o próximo clique marca o ponto (Esc cancela).
+
+## Descobrir o que dá para clicar ou preencher numa página web
+
+Nos blocos "Clicar na página web", "Preencher campo da página" e "Esperar"/"Se" (elemento da página) há o botão **Colar o HTML da página**. Abra a página, aperte Ctrl+U, selecione tudo, copie e cole na caixa. O Deck lista os botões, links, campos e listas, mostra uma foto da página com cada um numerado e entrega o seletor pronto ("Usar este"). Elementos sem id, nome nem texto fixo recebem um caminho pela posição, com aviso. O HTML só é lido e desenhado num Chrome/Edge temporário e invisível, sem scripts: nada dele é executado nem fica salvo. Se não houver Chrome/Edge, a lista aparece igual, só sem a foto.
+
+## Texto do Bloco de Notas por WhatsApp
+
+No aviso "Bloco de Notas" (arquivo TXT ou saída de um programa) marque **Enviar o conteúdo do texto por WhatsApp**, informe o número e escolha o modo (link wa.me + Enter, ou Evolution API). Dá para abrir no Bloco de Notas, enviar por WhatsApp, ou os dois. Pelo link cabem cerca de 1200 letras; pela Evolution API, cerca de 3800 (o que passar é cortado, com um aviso no fim).
+
+## Perguntar na hora, importar de arquivo e escolher o caminho
+
+- **Perguntar** (em "Esperar e controlar o fluxo"): ao rodar, abre uma janela pedindo um **texto** (ex.: CNPJ), um **arquivo** ou o **caminho** a seguir (1, 2, 3… com nome e prévia de cada um). A resposta fica guardada em `{nome}` e pode ser usada em qualquer texto dos blocos seguintes (digitar, colar, preencher campo da página, aviso, WhatsApp). "Quando perguntar": toda vez, ou só na primeira (depois lembra; para trocar, Opções → Respostas lembradas → Esquecer). Fechar a janela cancela o fluxo.
+- **Caminhos**: no Perguntar do tipo "caminho" use **Montar os caminhos logo abaixo**. Ele cria "Se resposta = 1 … senão se resposta = 2 … senão (3)" com um aviso-marcador em cada caminho; troque cada marcador pelos blocos reais. Os três caminhos continuam existindo na tecla; só o escolhido roda. Também dá para criar o Se à mão com a condição "A resposta de um bloco Perguntar".
+- **Digitar/Colar texto de um arquivo**: em "De onde vem o texto" escolha "Importar de um arquivo": caminho fixo, perguntar o arquivo na primeira vez (e lembrar) ou perguntar toda vez. O caminho aceita `{variáveis}`; arquivos .txt em UTF-8 ou ANSI.
+- **Abrir site no navegador do Deck**: escolha "Em uma aba nova" (opcionalmente em segundo plano, sem passar na frente) ou "Usar a página atual" (sem endereço, só usa a aba já aberta; com endereço, vai para ele nessa aba). Os cliques e campos da página são feitos pelo navegador, sem mexer no seu mouse, então você segue usando o computador. Só funciona no navegador do Deck (o Chrome comum não aceita controle remoto no seu perfil).
+
 ## Atualização automática
 
 O `NumpadDeck.exe` (baixado da Release do GitHub) procura uma versão mais nova ao abrir. Se houver, baixa, confere (origem oficial, tamanho, SHA-256), troca o arquivo e reinicia sozinho; as suas teclas e configurações não mudam. Pode desligar em Opções ou usar "Procurar atualização agora".
@@ -165,4 +184,3 @@ Cobrem as regras de teclas (modo padrão/deck, `/`, `*`, `-`, repetição, Num L
 ## Arquivos
 
 `main.py` (entrada) · `posicao.py` (clique relativo à janela) · `navegador.py` (navegador do Deck) · `avisos.py` (pop-up, WhatsApp/Evolution, saída para o Bloco de Notas) · `instalar.bat`, `iniciar.bat`, `atualizar.bat`, `build.bat`, `build-no-linux.sh`, `gerar-exe-pelo-github.sh` · `nucleo.py` (regras das teclas) · `configuracao.py` (JSON, validação, imagens) · `servidor.py` + `web/index.html` (painel) · `hook_win.py`, `ui_tk.py` (pop-ups), `plataforma_win.py` (partes do Windows) · `teclas.py` (nomes das teclas)
-

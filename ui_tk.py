@@ -14,6 +14,7 @@ import avisos
 COR_FUNDO = "#202024"
 COR_VERDE = "#04d361"
 COR_TEXTO = "#e1e1e6"
+COR_CARTAO = "#2a2a30"
 
 
 class InterfaceTk:
@@ -28,6 +29,8 @@ class InterfaceTk:
         self._avisos: dict = {}           # pop-ups de aviso abertos, por posição
         self._overlay = None
         self._overlay_fut: Future | None = None
+        self._pergunta = None             # janela de pergunta aberta (bloco Perguntar)
+        self._pergunta_fut: Future | None = None
         self._previa = None
         self._previa_depois = None
         self._fotos: list = []            # o tkinter some com a imagem se ninguém guardar a referência
@@ -118,14 +121,57 @@ class InterfaceTk:
             pass
 
     # ------------------------------------------------------------ tela escura para marcar clique
-    def capturar_clique(self, timeout: float = 60, mensagem: str = "Clique onde a tecla deve clicar"):
+    def capturar_clique(self, timeout: float = 60, mensagem: str = "Clique onde a tecla deve clicar", espera: float = 5):
+        """Contagem de `espera` segundos (dá tempo de trocar de aba/janela) e depois a tela escura para clicar."""
         fut: Future = Future()
-        self.post(lambda: self._overlay_ui(fut, mensagem))
+        self.post(lambda: self._com_contagem(fut, mensagem, espera, lambda: self._overlay_ui(fut, mensagem)))
         try:
-            return fut.result(timeout)
+            return fut.result(timeout + espera)
         except Exception:
             self.cancelar_overlay()
             return None
+
+    def _com_contagem(self, fut: Future, mensagem: str, espera: float, abrir) -> None:
+        """Mostra um aviso pequeno com a contagem (a tela continua livre para mexer); no zero, chama `abrir`."""
+        if espera <= 0:
+            abrir()
+            return
+        tk = self.tk
+        self._fim_overlay(self._overlay_fut, None)
+        top = tk.Toplevel(self.root)
+        self._overlay, self._overlay_fut = top, fut
+        top.overrideredirect(True)
+        top.attributes("-topmost", True)
+        top.configure(bg="#1d1d22", highlightbackground=COR_VERDE, highlightthickness=3)
+        ux, uy, uw, _uh = self._area_util()
+        larg, alt = 560, 150
+        top.geometry(f"{larg}x{alt}{ux + (uw - larg) // 2:+d}{uy + 24:+d}")
+        resta = [int(espera)]
+        texto = tk.StringVar()
+        tk.Label(top, textvariable=texto, bg="#1d1d22", fg="white", font=("Segoe UI", 15, "bold"),
+                 justify="center", wraplength=larg - 30).pack(pady=(18, 8), padx=15)
+        botao = tk.Button(top, text="Cancelar", command=lambda: self._fim_overlay(fut, None), relief="flat",
+                          bg="#3a3a44", fg="white", activebackground="#4a4a56", activeforeground="white",
+                          font=("Segoe UI", 11), padx=16)
+        botao.pack()
+        top.bind("<Escape>", lambda _e: self._fim_overlay(fut, None))
+
+        def tique():
+            if self._overlay is not top:          # cancelado
+                return
+            if resta[0] <= 0:
+                try:
+                    top.destroy()
+                except tk.TclError:
+                    pass
+                self._overlay = self._overlay_fut = None
+                abrir()
+                return
+            texto.set(f"{mensagem}\nTroque de aba ou janela agora: a tela de clique abre em {resta[0]} s")
+            resta[0] -= 1
+            self.root.after(1000, tique)
+
+        tique()
 
     def _tela_virtual(self):
         if sys.platform == "win32":
@@ -237,13 +283,13 @@ class InterfaceTk:
             self._avisos.pop(chave, None)
 
     # ------------------------------------------------------------ desenhar na tela onde o aviso aparece
-    def capturar_area(self, timeout: float = 120):
+    def capturar_area(self, timeout: float = 120, espera: float = 5):
         """Tela escura: o usuário arrasta um retângulo. Devolve {x, y, l, a} em frações (0 a 1) da tela
         virtual, ou None se cancelar."""
         fut: Future = Future()
-        self.post(lambda: self._area_ui(fut))
+        self.post(lambda: self._com_contagem(fut, "Desenhe onde o aviso vai aparecer", espera, lambda: self._area_ui(fut)))
         try:
-            return fut.result(timeout)
+            return fut.result(timeout + espera)
         except Exception:
             self.cancelar_overlay()
             return None
@@ -303,24 +349,160 @@ class InterfaceTk:
         top.focus_force()
 
     # ------------------------------------------------------------ seletor de arquivo
-    def escolher_arquivo(self, timeout: float = 300):
+    def escolher_arquivo(self, timeout: float = 300, texto: bool = False):
         fut: Future = Future()
-        self.post(lambda: self._arquivo_ui(fut))
+        self.post(lambda: self._arquivo_ui(fut, texto))
         try:
             return fut.result(timeout)
         except Exception:
             return None
 
-    def _arquivo_ui(self, fut: Future) -> None:
+    def _arquivo_ui(self, fut: Future, texto: bool = False) -> None:
         from tkinter import filedialog
 
         try:
             self.root.attributes("-topmost", True)
             caminho = filedialog.askopenfilename(
                 parent=self.root,
-                title="Escolha o programa ou script",
-                filetypes=[("Python, programas e atalhos", "*.py *.pyw *.bat *.cmd *.exe *.lnk"), ("Todos os arquivos", "*.*")],
+                title="Escolha o arquivo de texto" if texto else "Escolha o programa ou script",
+                filetypes=[("Textos", "*.txt *.csv *.md *.log"), ("Todos os arquivos", "*.*")] if texto else
+                          [("Python, programas e atalhos", "*.py *.pyw *.bat *.cmd *.exe *.lnk"), ("Todos os arquivos", "*.*")],
             )
+        finally:
+            self.root.attributes("-topmost", False)
+        fut.set_result(caminho or None)
+
+    # ------------------------------------------------------------ perguntas do bloco "Perguntar"
+    def _perguntar_ui(self, montar, timeout: float):
+        fut: Future = Future()
+        self.post(lambda: montar(fut))
+        try:
+            return fut.result(timeout)
+        except Exception:
+            self.post(lambda: self._fechar_pergunta(self._pergunta_fut, None))
+            return None
+
+    def _fechar_pergunta(self, fut, valor=None) -> None:
+        w, self._pergunta = self._pergunta, None
+        if w is not None:
+            try:
+                w.destroy()
+            except self.tk.TclError:
+                pass
+        if fut is not None and not fut.done():
+            fut.set_result(valor)
+
+    def _janela_pergunta(self, titulo: str, fut: Future, largura: int = 540):
+        tk = self.tk
+        self._fechar_pergunta(self._pergunta_fut, None)
+        w = tk.Toplevel(self.root)
+        self._pergunta, self._pergunta_fut = w, fut
+        w.title("Numpad Deck")
+        w.configure(bg=COR_FUNDO, highlightbackground=COR_VERDE, highlightthickness=2)
+        w.attributes("-topmost", True)
+        w.resizable(False, False)
+        tk.Label(w, text=titulo, bg=COR_FUNDO, fg=COR_VERDE, font=("Segoe UI", 14, "bold"), anchor="w",
+                 justify="left", wraplength=largura - 40).pack(fill="x", padx=20, pady=(16, 8))
+        w.protocol("WM_DELETE_WINDOW", lambda: self._fechar_pergunta(fut, None))
+        w.bind("<Escape>", lambda _e: self._fechar_pergunta(fut, None))
+        return w
+
+    def _mostrar_pergunta(self, w, foco=None) -> None:
+        w.update_idletasks()
+        ux, uy, uw, uh = self._area_util()
+        w.geometry(f"+{ux + max(0, (uw - w.winfo_reqwidth()) // 2)}+{uy + max(0, (uh - w.winfo_reqheight()) // 3)}")
+        if sys.platform == "win32":      # o Windows só deixa a janela ir à frente se o programa "acabou de receber uma tecla"
+            try:
+                import ctypes
+
+                ctypes.windll.user32.keybd_event(0x12, 0, 0, 0)   # Alt solto logo em seguida: libera o primeiro plano
+                ctypes.windll.user32.keybd_event(0x12, 0, 2, 0)
+            except Exception:
+                pass
+        w.lift()
+        w.focus_force()
+        if foco is not None:
+            foco.focus_set()
+
+    def perguntar_texto(self, titulo: str, padrao: str = "", timeout: float = 600):
+        return self._perguntar_ui(lambda fut: self._texto_ui(fut, titulo, padrao), timeout)
+
+    def _texto_ui(self, fut: Future, titulo: str, padrao: str) -> None:
+        tk = self.tk
+        w = self._janela_pergunta(titulo, fut)
+        campo = tk.Entry(w, font=("Segoe UI", 13), width=44, bg=COR_CARTAO, fg=COR_TEXTO, insertbackground=COR_TEXTO,
+                         relief="flat", highlightthickness=1, highlightbackground="#3a3a44", highlightcolor=COR_VERDE)
+        campo.pack(padx=20, pady=(0, 12), ipady=6)
+        campo.insert(0, padrao)
+        campo.select_range(0, "end")
+
+        def ok(_e=None):
+            valor = campo.get().strip()
+            if valor:
+                self._fechar_pergunta(fut, valor)
+
+        botoes = tk.Frame(w, bg=COR_FUNDO)
+        botoes.pack(fill="x", padx=20, pady=(0, 16))
+        tk.Button(botoes, text="OK", command=ok, bg=COR_VERDE, fg="black", relief="flat", font=("Segoe UI", 11, "bold"),
+                  padx=22, pady=4).pack(side="right")
+        tk.Button(botoes, text="Cancelar", command=lambda: self._fechar_pergunta(fut, None), bg="#3a3a44", fg="white",
+                  relief="flat", font=("Segoe UI", 11), padx=16, pady=4).pack(side="right", padx=(0, 10))
+        campo.bind("<Return>", ok)
+        self._mostrar_pergunta(w, campo)
+
+    def perguntar_escolha(self, titulo: str, opcoes: list, timeout: float = 600):
+        """Mostra os caminhos (nome + descrição) e devolve "1", "2"... conforme o escolhido (ou None)."""
+        return self._perguntar_ui(lambda fut: self._escolha_ui(fut, titulo, opcoes), timeout)
+
+    def _escolha_ui(self, fut: Future, titulo: str, opcoes: list) -> None:
+        tk = self.tk
+        w = self._janela_pergunta(titulo, fut, 620)
+        w.cartoes = []
+
+        def escolher(i):
+            self._fechar_pergunta(fut, str(i + 1))
+
+        for i, op in enumerate(opcoes):
+            cartao = tk.Frame(w, bg=COR_CARTAO, highlightbackground="#3a3a44", highlightthickness=1, cursor="hand2")
+            cartao.pack(fill="x", padx=20, pady=5)
+            nome = tk.Label(cartao, text=f"{i + 1}   {op['nome']}", bg=COR_CARTAO, fg=COR_TEXTO, font=("Segoe UI", 13, "bold"),
+                            anchor="w", cursor="hand2")
+            nome.pack(fill="x", padx=14, pady=(10, 2 if op.get("descricao") else 10))
+            partes = [cartao, nome]
+            if op.get("descricao"):
+                desc = tk.Label(cartao, text=op["descricao"], bg=COR_CARTAO, fg="#a8a8b3", font=("Segoe UI", 10), anchor="w",
+                                justify="left", wraplength=560, cursor="hand2")
+                desc.pack(fill="x", padx=14, pady=(0, 10))
+                partes.append(desc)
+            for p in partes:
+                p.bind("<Button-1>", lambda _e, i=i: escolher(i))
+                p.bind("<Enter>", lambda _e, c=cartao: c.configure(highlightbackground=COR_VERDE))
+                p.bind("<Leave>", lambda _e, c=cartao: c.configure(highlightbackground="#3a3a44"))
+            w.cartoes.append(cartao)
+            if i < 9:
+                w.bind(str(i + 1), lambda _e, i=i: escolher(i))
+        tk.Label(w, text="Clique no caminho ou aperte o número dele no teclado (Esc cancela)", bg=COR_FUNDO, fg="#7c7c88",
+                 font=("Segoe UI", 9)).pack(pady=(6, 14))
+        self._mostrar_pergunta(w)
+
+    def perguntar_arquivo(self, titulo: str, inicial: str = "", timeout: float = 600):
+        fut: Future = Future()
+        self.post(lambda: self._pergunta_arquivo_ui(fut, titulo, inicial))
+        try:
+            return fut.result(timeout)
+        except Exception:
+            return None
+
+    def _pergunta_arquivo_ui(self, fut: Future, titulo: str, inicial: str) -> None:
+        from pathlib import Path
+        from tkinter import filedialog
+
+        pasta = Path(inicial).parent if inicial and Path(inicial).parent.is_dir() else None
+        try:
+            self.root.attributes("-topmost", True)
+            caminho = filedialog.askopenfilename(parent=self.root, title=titulo or "Escolha o arquivo",
+                                                 initialdir=str(pasta) if pasta else None,
+                                                 filetypes=[("Textos", "*.txt *.csv *.md *.log"), ("Todos os arquivos", "*.*")])
         finally:
             self.root.attributes("-topmost", False)
         fut.set_result(caminho or None)

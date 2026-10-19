@@ -177,7 +177,7 @@ class AvisoNaTela(unittest.TestCase):
                 ev("<B1-Motion>", 0.8, 0.9)
                 ev("<ButtonRelease-1>", 0.8, 0.9)
             threading.Thread(target=arrastar, daemon=True).start()
-            r["area"] = ui.capturar_area(5)
+            r["area"] = ui.capturar_area(5, 0)
 
         r = self.rodar(roteiro)
         a = r["area"]
@@ -187,13 +187,103 @@ class AvisoNaTela(unittest.TestCase):
         self.assertAlmostEqual(a["l"], 0.2, delta=0.01)
         self.assertAlmostEqual(a["a"], 0.2, delta=0.01)
 
+    def test_contagem_antes_da_tela_de_clique(self):
+        def roteiro(ui, r):
+            def clicar():
+                time.sleep(0.4)
+                r["no_inicio"] = self.na_tela(ui, lambda: len(ui._overlay.winfo_children()))   # aviso pequeno, ainda sem a tela escura
+                r["largura_aviso"] = self.na_tela(ui, lambda: ui._overlay.winfo_width())
+                time.sleep(2.0)
+                tela = self.na_tela(ui, lambda: ui._overlay.winfo_width())
+                r["largura_tela"] = tela
+                self.na_tela(ui, lambda: ui._overlay.event_generate("<Button-1>", x=40, y=50))
+            threading.Thread(target=clicar, daemon=True).start()
+            r["xy"] = ui.capturar_clique(5, "teste", 1)
+
+        r = self.rodar(roteiro)
+        self.assertIsNotNone(r["xy"])
+        self.assertLess(r["largura_aviso"], 700)       # primeiro só o aviso da contagem
+        self.assertGreater(r["largura_tela"], 700)     # depois a tela inteira
+
+    def test_cancelar_durante_a_contagem(self):
+        def roteiro(ui, r):
+            def cancelar():
+                time.sleep(0.4)
+                self.na_tela(ui, lambda: ui._overlay.event_generate("<Escape>"))
+            threading.Thread(target=cancelar, daemon=True).start()
+            r["xy"] = ui.capturar_clique(5, "teste", 3)
+
+        self.assertIsNone(self.rodar(roteiro)["xy"])
+
+    def test_pergunta_de_texto(self):
+        def roteiro(ui, r):
+            def digitar():
+                time.sleep(0.5)
+                entrada = self.na_tela(ui, lambda: [w for w in ui._pergunta.winfo_children() if w.winfo_class() == "Entry"][0])
+                r["sugerido"] = self.na_tela(ui, lambda: entrada.get())
+                self.na_tela(ui, lambda: (entrada.delete(0, "end"), entrada.insert(0, "  12.345.678/0001-90 ")))
+                self.na_tela(ui, lambda: entrada.event_generate("<Return>"))
+            threading.Thread(target=digitar, daemon=True).start()
+            r["resp"] = ui.perguntar_texto("CNPJ da empresa?", "00.000", 5)
+
+        r = self.rodar(roteiro)
+        self.assertEqual((r["sugerido"], r["resp"]), ("00.000", "12.345.678/0001-90"))
+
+    def test_pergunta_de_texto_vazio_nao_fecha_e_esc_cancela(self):
+        def roteiro(ui, r):
+            def agir():
+                time.sleep(0.5)
+                entrada = self.na_tela(ui, lambda: [w for w in ui._pergunta.winfo_children() if w.winfo_class() == "Entry"][0])
+                self.na_tela(ui, lambda: (entrada.delete(0, "end"), entrada.event_generate("<Return>")))
+                time.sleep(0.2)
+                r["ainda_aberta"] = self.na_tela(ui, lambda: ui._pergunta is not None)
+                self.na_tela(ui, lambda: ui._pergunta.event_generate("<Escape>"))
+            threading.Thread(target=agir, daemon=True).start()
+            r["resp"] = ui.perguntar_texto("CNPJ?", "", 5)
+
+        r = self.rodar(roteiro)
+        self.assertTrue(r["ainda_aberta"])
+        self.assertIsNone(r["resp"])
+
+    OPCOES = [{"nome": "Nota antiga", "descricao": "Copia uma nota já emitida"}, {"nome": "CNPJ", "descricao": ""},
+              {"nome": "Do zero", "descricao": "Preenche tudo"}]
+
+    def test_escolha_de_caminho_por_clique(self):
+        def roteiro(ui, r):
+            def clicar():
+                time.sleep(0.5)
+                r["n"] = self.na_tela(ui, lambda: len(ui._pergunta.cartoes))
+                self.na_tela(ui, lambda: ui._pergunta.cartoes[1].event_generate("<Button-1>"))
+            threading.Thread(target=clicar, daemon=True).start()
+            r["resp"] = ui.perguntar_escolha("Qual caminho?", self.OPCOES, 5)
+
+        r = self.rodar(roteiro)
+        self.assertEqual((r["n"], r["resp"]), (3, "2"))
+
+    def test_escolha_de_caminho_pelo_numero_e_esc(self):
+        def roteiro(ui, r):
+            def teclar():
+                time.sleep(0.5)
+                self.na_tela(ui, lambda: (ui._pergunta.focus_force(), ui._pergunta.event_generate("<Key-3>")))
+            threading.Thread(target=teclar, daemon=True).start()
+            r["resp"] = ui.perguntar_escolha("Qual caminho?", self.OPCOES, 5)
+            def esc():
+                time.sleep(0.5)
+                self.na_tela(ui, lambda: ui._pergunta.event_generate("<Escape>"))
+            threading.Thread(target=esc, daemon=True).start()
+            r["cancelado"] = ui.perguntar_escolha("Qual caminho?", self.OPCOES, 5)
+
+        r = self.rodar(roteiro)
+        self.assertEqual(r["resp"], "3")
+        self.assertIsNone(r["cancelado"])
+
     def test_esc_cancela_o_desenho(self):
         def roteiro(ui, r):
             def cancelar():
                 time.sleep(0.5)
                 self.na_tela(ui, lambda: ui._overlay.event_generate("<Escape>"))
             threading.Thread(target=cancelar, daemon=True).start()
-            r["area"] = ui.capturar_area(5)
+            r["area"] = ui.capturar_area(5, 0)
 
         self.assertIsNone(self.rodar(roteiro)["area"])
 

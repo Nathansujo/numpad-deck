@@ -20,10 +20,14 @@ from pathlib import Path
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 from werkzeug.serving import make_server
 
+import analisehtml
 from atualizador import ErroAtualizacao
 from avisos import ErroAviso
 from versao import VERSAO
 from configuracao import ANCORAS_JANELA, ErroConfig, TECLAS, descrever_bloco, descrever_fluxo, validar_bloco
+
+
+ESPERA_CAPTURA = 5     # segundos para trocar de aba/janela antes da tela escura de clique
 
 
 def recurso(*partes: str) -> Path:
@@ -182,7 +186,7 @@ def criar_app(cfg, nucleo, ui, plat, token: str, porta: int, atualizar=None) -> 
         ancora = d.get("ancora", "proporcional")
         if janela and ancora not in ANCORAS_JANELA:
             raise ErroConfig("Escolha como a posição acompanha a janela.")
-        xy = ui.capturar_clique(60, "Clique no ponto da janela do programa" if janela else "Clique onde a tecla deve clicar")
+        xy = ui.capturar_clique(60, "Clique no ponto da janela do programa" if janela else "Clique onde a tecla deve clicar", ESPERA_CAPTURA)
         if xy is None:
             return erro("Clique cancelado.", 408)
         x, y = int(xy[0]), int(xy[1])
@@ -196,7 +200,7 @@ def criar_app(cfg, nucleo, ui, plat, token: str, porta: int, atualizar=None) -> 
 
     @app.post("/api/capturar-cor")
     def capturar_cor():
-        xy = ui.capturar_clique(60, "Clique no ponto cuja cor deve ser observada")
+        xy = ui.capturar_clique(60, "Clique no ponto cuja cor deve ser observada", ESPERA_CAPTURA)
         if xy is None:
             return erro("Clique cancelado.", 408)
         time.sleep(0.3)   # a tela escura precisa sumir antes de ler a cor
@@ -208,7 +212,7 @@ def criar_app(cfg, nucleo, ui, plat, token: str, porta: int, atualizar=None) -> 
 
     @app.post("/api/capturar-area")
     def capturar_area():
-        area = ui.capturar_area(120)
+        area = ui.capturar_area(120, ESPERA_CAPTURA)
         if area is None:
             return erro("Desenho cancelado.", 408)
         return jsonify(area)
@@ -222,7 +226,10 @@ def criar_app(cfg, nucleo, ui, plat, token: str, porta: int, atualizar=None) -> 
 
     @app.post("/api/escolher-arquivo")
     def escolher_arquivo():
-        caminho = ui.escolher_arquivo()
+        if (request.get_json(silent=True) or {}).get("texto") is True:
+            caminho = ui.escolher_arquivo(texto=True)
+        else:
+            caminho = ui.escolher_arquivo()
         if not caminho:
             return erro("Nenhum arquivo escolhido.", 408)
         return jsonify({"caminho": caminho})
@@ -274,6 +281,44 @@ def criar_app(cfg, nucleo, ui, plat, token: str, porta: int, atualizar=None) -> 
         numero = validar_bloco({"tipo": "aviso", "canal": "whatsapp", "numero": corpo().get("numero"), "texto": "x"})["numero"]
         plat.enviar_whatsapp(numero, "Teste do Numpad Deck: a Evolution API está funcionando.")
         return jsonify({"ok": True})
+
+    @app.post("/api/respostas")
+    def respostas():
+        d = corpo()
+        if d.get("esquecer_tudo") is True:
+            cfg.esquecer_respostas()
+        elif isinstance(d.get("esquecer"), str):
+            cfg.esquecer_respostas(d["esquecer"])
+        else:
+            raise ErroConfig("Diga qual resposta esquecer.")
+        return jsonify({"respostas": cfg.respostas()})
+
+    @app.post("/api/analisar-html")
+    def analisar_html():
+        html = corpo().get("html")
+        if not isinstance(html, str) or not html.strip():
+            raise ErroConfig("Cole o código-fonte (HTML) da página.")
+        if len(html) > 4_000_000:
+            raise ErroConfig("HTML grande demais (máximo 4 MB). Cole só a parte da página que importa.")
+        res = analisehtml.analisar(html)
+        elementos, imagem, aviso = res["elementos"], None, None
+        if not elementos:
+            aviso = "Não achei botões, links nem campos nesse HTML. Confira se colou o código da página inteira."
+        else:
+            try:
+                foto = plat.fotografar_html(analisehtml.higienizar(html), [e["seletor"] for e in elementos])
+                for e in elementos:
+                    medida = foto["retangulos"].get(e["seletor"]) or {}
+                    e["rect"] = medida if medida.get("w") is not None else None
+                    e["achados"] = medida.get("achados")
+                imagem = analisehtml.marcar_imagem(foto["png"], elementos)
+            except Exception as ex:      # sem navegador a lista continua valendo; só falta a foto
+                logging.warning("Foto do HTML: %s", ex)
+                aviso = "A lista está pronta, mas não consegui desenhar a página (" + str(ex) + ")."
+        for e in elementos:
+            e.pop("rect", None)
+        return jsonify({"elementos": elementos, "total": res["total"], "cortado": res["cortado"],
+                        "imagem": imagem, "aviso": aviso})
 
     @app.post("/api/atualizar")
     def procurar_atualizacao():

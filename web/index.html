@@ -62,6 +62,18 @@ dialog::backdrop{background:#000a}
 .dlg label.check,.check{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--txt)}
 .aviso{max-width:560px;margin:15vh auto;padding:24px;background:var(--card);border:1px solid var(--borda);border-radius:12px;text-align:center}
 
+/* analisar HTML */
+.an-img{max-width:100%;border:1px solid var(--borda);border-radius:8px;background:#fff}
+.an-lista{display:grid;gap:8px}
+.an-item{display:grid;gap:6px;padding:10px 12px;background:var(--card2);border:1px solid var(--borda);border-radius:8px}
+.an-topo{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.an-n{width:24px;height:24px;border-radius:50%;background:var(--verde);color:#000;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none}
+.dlg .an-topo input[type=text]{flex:1;width:auto;min-width:120px}
+.an-acao{font-size:11px;padding:2px 8px;border-radius:99px;border:1px solid var(--borda);color:var(--mudo)}
+.an-item code,#respostas code{background:var(--bg);border:1px solid var(--borda);border-radius:5px;padding:3px 7px;font-size:12px;overflow-wrap:anywhere}
+.an-aviso{font-size:12px;color:#e0a030}
+#an-html{min-height:150px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+
 /* fluxo de blocos */
 .fluxo-titulo{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .fluxo{display:grid;gap:0}
@@ -189,6 +201,22 @@ details.trocar>summary:hover{color:var(--verde)}
   </div>
 </dialog>
 
+<!-- Descobrir elementos do HTML -->
+<dialog id="analise">
+  <div class="dlg">
+    <h2>O que dá para clicar ou preencher nesta página</h2>
+    <div class="dica">Na página, aperte Ctrl+U (ou botão direito → “Exibir código-fonte da página”), selecione tudo (Ctrl+A), copie (Ctrl+C) e cole abaixo. O Deck lista os botões, links e campos, mostra uma foto com cada um numerado e já entrega o seletor pronto. O HTML só é lido e desenhado: nada dele é executado.</div>
+    <textarea id="an-html" placeholder="Cole aqui o código-fonte (HTML) da página" spellcheck="false"></textarea>
+    <div class="linha">
+      <button class="btn ok" id="an-analisar" type="button">Analisar</button>
+      <div class="funcoes" id="an-filtro"></div>
+    </div>
+    <div id="an-msg" style="min-height:18px;font-size:13px;color:var(--verm)"></div>
+    <div id="an-resultado" style="display:grid;gap:12px"></div>
+    <div class="rodape"><button class="btn sec" id="an-fechar" type="button">Fechar</button></div>
+  </div>
+</dialog>
+
 <!-- Páginas -->
 <dialog id="paginas">
   <div class="dlg">
@@ -208,6 +236,7 @@ details.trocar>summary:hover{color:var(--verde)}
   <div class="dlg">
     <h2>Opções</h2>
     <div id="lista-opcoes" style="display:grid;gap:12px"></div>
+    <div id="respostas" class="cond"></div>
     <div id="evolution" class="cond"></div>
     <div class="rodape">
       <button class="btn perigo" id="encerrar" type="button">Encerrar o programa</button>
@@ -364,6 +393,7 @@ const FUNCOES = {
   repetir:       {icone: "🔁", nome: "Repetir"},
   se:            {icone: "🔀", nome: "Se / senão"},
   variavel:      {icone: "🔢", nome: "Contador / variável"},
+  perguntar:     {icone: "❓", nome: "Perguntar (texto, arquivo ou caminho)"},
   chamar:        {icone: "🔗", nome: "Chamar outra tecla"},
   ir_pagina:     {icone: "📄", nome: "Ir para página"},
   abrir:         {icone: "🚀", nome: "Abrir programa ou pasta"},
@@ -379,7 +409,7 @@ const FUNCOES = {
 };
 const CATEGORIAS = [
   ["Teclado e mouse", ["atalho", "texto", "colar", "clique", "mover", "rolagem"]],
-  ["Esperar e controlar o fluxo", ["pausa", "repetir", "se", "variavel", "chamar", "ir_pagina"]],
+  ["Esperar e controlar o fluxo", ["pausa", "repetir", "se", "variavel", "perguntar", "chamar", "ir_pagina"]],
   ["Programas, sites e página web", ["abrir", "site", "comando", "whatsapp", "web_clicar", "web_preencher"]],
   ["Sistema", ["midia", "captura", "sistema", "aviso"]],
 ];
@@ -387,6 +417,7 @@ const CONDICAO_PADRAO = {
   janela: () => ({tipo: "janela", modo: "ativa", texto: ""}),
   pixel:  () => ({tipo: "pixel", x: 0, y: 0, cor: "#000000", tolerancia: 24}),
   pagina: () => ({tipo: "pagina", alvo: "seletor", valor: "", aba: ""}),
+  resposta: () => ({tipo: "resposta", nome: "caminho", valor: "1"}),
 };
 const PADRAO = {
   atalho: () => ({teclas: []}), texto: () => ({texto: ""}), colar: () => ({texto: ""}),
@@ -395,7 +426,9 @@ const PADRAO = {
   repetir: () => ({vezes: 2, blocos: 1}),
   se: () => ({condicao: CONDICAO_PADRAO.janela(), negar: false, entao: 1, senao: 0}),
   variavel: () => ({nome: "contador", operacao: "somar", valor: 1}),
-  abrir: () => ({caminho: "", argumentos: ""}), site: () => ({url: "", controlado: false}),
+  perguntar: () => ({nome: "caminho", tipo_pergunta: "escolha", titulo: "Qual caminho seguir?", lembrar: "sempre", padrao: "",
+    opcoes: [{nome: "Caminho 1", descricao: ""}, {nome: "Caminho 2", descricao: ""}, {nome: "Caminho 3", descricao: ""}]}),
+  abrir: () => ({caminho: "", argumentos: ""}), site: () => ({url: "", controlado: false, destino: "nova", segundo_plano: false}),
   comando: () => ({shell: "powershell", comando: "", esperar: false}),
   whatsapp: () => ({numero: "", mensagem: "", controlado: false}),
   web_clicar: () => ({seletor: "", aba: "", limite: 10}),
@@ -407,7 +440,7 @@ const PADRAO = {
 const AVISO_PADRAO = {
   popup: () => ({canal: "popup", titulo: "", texto: "", tamanho: "medio", posicao: "baixo_dir", segundos: 5}),
   whatsapp: () => ({canal: "whatsapp", modo: "link", numero: "", texto: "", espera: 10}),
-  bloco_notas: () => ({canal: "bloco_notas", origem: "arquivo", arquivo: "", pasta: "", shell: "python", comando: "", limite: 120}),
+  bloco_notas: () => ({canal: "bloco_notas", origem: "arquivo", arquivo: "", pasta: "", shell: "python", comando: "", limite: 120, abrir: true, whatsapp: null}),
 };
 const TAMANHOS_AVISO = {pequeno: [0.20, 0.10, "Pequeno"], medio: [0.30, 0.17, "Médio"], grande: [0.46, 0.32, "Grande"]};
 const POSICOES_AVISO = {centro: "Centro", topo: "Topo", baixo: "Embaixo", topo_esq: "Canto superior esquerdo", topo_dir: "Canto superior direito",
@@ -418,6 +451,7 @@ const SISTEMA = {bloquear: "Bloquear o computador", monitor_off: "Desligar o mon
 function resumoCondicao(c){
   if (c.tipo === "janela") return c.modo === "ativa" ? 'janela ativa com "' + c.texto + '"' : 'janela "' + c.texto + '" aberta';
   if (c.tipo === "pixel") return "cor " + c.cor + " em (" + c.x + ", " + c.y + ")";
+  if (c.tipo === "resposta") return "resposta {" + c.nome + '} = "' + c.valor + '"';
   return c.alvo === "seletor" ? "elemento " + c.valor + " na página" : 'texto "' + c.valor + '" na página';
 }
 const curto = (t, n) => { t = String(t).replace(/\n/g, " "); return t.length > n ? t.slice(0, n) + "…" : t; };
@@ -434,8 +468,11 @@ function resumoOnde(b){
 function resumo(b){
   switch (b.tipo) {
     case "atalho": return b.teclas.length ? "Atalho: " + b.teclas.map(t => t.nome).join(" + ") : "Atalho · grave o comando";
-    case "texto": return b.texto ? 'Digitar: "' + curto(b.texto, 40) + '"' : "Digitar texto · escreva o texto";
-    case "colar": return b.texto ? 'Colar: "' + curto(b.texto, 40) + '"' : "Colar texto · escreva o texto";
+    case "perguntar": return "Perguntar " + ({texto: "texto", arquivo: "arquivo", escolha: "o caminho (" + (b.opcoes || []).length + ")"}[b.tipo_pergunta]) + ": " + curto(b.titulo || "?", 28) + " → {" + b.nome + "}";
+    case "texto": if (b.fonte === "arquivo") return "Digitar o texto de um arquivo" + ({nunca: b.arquivo ? ": " + curto(b.arquivo.split(/[\\/]/).pop(), 28) : " · informe o arquivo", primeira_vez: " (pergunta na 1ª vez)", sempre: " (pergunta toda vez)"}[b.perguntar || "nunca"]);
+      return b.texto ? 'Digitar: "' + curto(b.texto, 40) + '"' : "Digitar texto · escreva o texto";
+    case "colar": if (b.fonte === "arquivo") return "Colar o texto de um arquivo" + ({nunca: b.arquivo ? ": " + curto(b.arquivo.split(/[\\/]/).pop(), 28) : " · informe o arquivo", primeira_vez: " (pergunta na 1ª vez)", sempre: " (pergunta toda vez)"}[b.perguntar || "nunca"]);
+      return b.texto ? 'Colar: "' + curto(b.texto, 40) + '"' : "Colar texto · escreva o texto";
     case "clique": return (b.duplo ? "Duplo clique " : "Clique ") + ({esquerdo: "esquerdo", direito: "direito", meio: "do meio"}[b.botao]) + " " + resumoOnde(b);
     case "mover": return "Mover o mouse para " + resumoOnde(b);
     case "rolagem": return "Rolar para " + b.direcao + " (" + b.quantidade + "x)";
@@ -446,7 +483,8 @@ function resumo(b){
     case "se": return "Se " + (b.negar ? "NÃO " : "") + resumoCondicao(b.condicao) + " → " + b.entao + " bloco(s)" + (b.senao ? ", senão " + b.senao : "");
     case "variavel": return b.operacao === "zerar" ? "Zerar {" + b.nome + "}" : (b.operacao === "somar" ? "Somar " + b.valor + " a" : "Definir") + " {" + b.nome + "}" + (b.operacao === "definir" ? " = " + b.valor : "");
     case "abrir": return b.caminho ? "Abrir: " + b.caminho.split(/[\\/]/).filter(Boolean).pop() + (b.argumentos ? " " + b.argumentos : "") : "Abrir programa · escolha o arquivo ou pasta";
-    case "site": return b.url ? "Abrir site: " + b.url.replace(/^https?:\/\//, "") + (b.controlado ? " (navegador do Deck)" : "") : "Abrir site · escreva o endereço";
+    case "site": if (b.controlado && b.destino === "atual") return "Usar a página atual do navegador do Deck" + (b.url ? " e ir para " + b.url.replace(/^https?:\/\//, "") : "");
+      return b.url ? "Abrir site: " + b.url.replace(/^https?:\/\//, "") + (b.controlado ? " (navegador do Deck)" : "") : "Abrir site · escreva o endereço";
     case "comando": return b.comando ? (b.shell === "cmd" ? "CMD: " : "PowerShell: ") + curto(b.comando, 40) : "Comando · escreva o comando";
     case "whatsapp": return "WhatsApp" + (b.numero ? " para " + b.numero : "") + (b.mensagem ? ': "' + curto(b.mensagem, 24) + '"' : "");
     case "web_clicar": return b.seletor ? "Clicar na página: " + b.seletor : "Clicar na página · informe o seletor";
@@ -460,7 +498,7 @@ function resumo(b){
       if (b.canal === "whatsapp") return b.numero || b.texto ? "Avisar no WhatsApp" + (b.numero ? " (" + b.numero + ")" : "") + (b.texto ? ': "' + curto(b.texto, 30) + '"' : "") : "Aviso no WhatsApp · informe número e mensagem";
       if (b.canal === "bloco_notas") {
         if (b.origem === "saida") return b.comando ? "Bloco de Notas com a saída de: " + curto(b.comando.split(/[\\/]/).filter(Boolean).pop(), 36) : "Bloco de Notas · informe o comando ou script";
-        return b.arquivo ? "Bloco de Notas: " + b.arquivo.split(/[\\/]/).filter(Boolean).pop() : "Bloco de Notas · informe o arquivo";
+        return b.arquivo ? "Bloco de Notas: " + b.arquivo.split(/[\\/]/).filter(Boolean).pop() + (b.whatsapp ? " → WhatsApp" : "") : "Bloco de Notas · informe o arquivo";
       }
       return b.texto ? "Aviso" + (b.tamanho ? " " + TAMANHOS_AVISO[b.tamanho][2].toLowerCase() : "") + ': "' + curto(b.texto, 36) + '"' : "Aviso · escreva a mensagem";
     default: return "Novo bloco · clique e escolha a função";
@@ -641,12 +679,143 @@ function marcaCaixa(rotulo, valor, aoMudar, estrutural){
   return el("label", {class: "check"}, cx, rotulo);
 }
 
+/* ---------- analisar o HTML colado ---------- */
+const analise = {dados: null, filtro: "todos", aoEscolher: null};
+
+function botaoAnalise(entrada, aoEscolher, filtro){
+  const b = el("button", {class: "btn sec", type: "button"}, "🔎 Colar o HTML da página e escolher o elemento");
+  b.onclick = () => {
+    analise.aoEscolher = (sel) => { entrada.value = sel; aoEscolher(sel); };
+    analise.filtro = filtro || "todos";
+    desenharAnalise();
+    $("analise").showModal();
+  };
+  return b;
+}
+
+function desenharAnalise(){
+  const filtroBox = $("an-filtro");
+  filtroBox.replaceChildren();
+  for (const [k, nome] of [["todos", "Todos"], ["clicar", "Só clicar"], ["preencher", "Só preencher"]])
+    filtroBox.append(el("button", {type: "button", class: "chip" + (analise.filtro === k ? " atual" : ""), onclick: () => { analise.filtro = k; desenharAnalise(); }}, nome));
+  const alvo = $("an-resultado");
+  alvo.replaceChildren();
+  const d = analise.dados;
+  if (!d) return;
+  if (d.aviso) alvo.append(el("div", {class: "an-aviso"}, d.aviso));
+  if (d.imagem) alvo.append(el("img", {class: "an-img", src: d.imagem, alt: "Foto da página com os elementos numerados"}));
+  const lista = el("div", {class: "an-lista"});
+  const itens = d.elementos.filter(e => analise.filtro === "todos" || e.acao === analise.filtro);
+  for (const e of itens) {
+    const usar = (sel) => { analise.aoEscolher(sel); $("analise").close(); };
+    const linha = el("div", {class: "an-item"},
+      el("div", {class: "an-topo"}, el("span", {class: "an-n"}, String(e.n)), el("strong", {}, e.rotulo),
+        el("span", {class: "an-acao"}, e.acao === "clicar" ? "clicar" : "preencher")),
+      el("div", {class: "an-topo"}, el("code", {}, e.seletor),
+        el("button", {class: "btn ok", type: "button", onclick: () => usar(e.seletor)}, "Usar este")));
+    if (e.por_posicao) linha.append(el("div", {class: "an-aviso"}, "Sem id, nome nem texto fixo que o identifique: este seletor segue a posição na página e pode quebrar se a página mudar de layout."));
+    if (e.achados === 0) linha.append(el("div", {class: "an-aviso"}, "O navegador não achou este seletor ao desenhar a página (o HTML pode ter sido montado por script)."));
+    else if (e.achados > 1) linha.append(el("div", {class: "an-aviso"}, e.achados + " elementos casam com ele; o Deck usa o primeiro."));
+    if (e.alternativas.length) {
+      const alt = el("div", {class: "an-topo"}, el("span", {class: "dica"}, "Outras formas:"));
+      for (const a of e.alternativas) alt.append(el("button", {class: "chip", type: "button", title: "Usar " + a, onclick: () => usar(a)}, a));
+      linha.append(alt);
+    }
+    lista.append(linha);
+  }
+  if (!itens.length && d.elementos.length) lista.append(el("div", {class: "dica"}, "Nenhum elemento desse tipo. Escolha “Todos”."));
+  if (d.cortado) lista.append(el("div", {class: "dica"}, "A página tem " + d.total + " elementos; mostrei os primeiros " + d.elementos.length + "."));
+  alvo.append(lista);
+}
+
+$("an-analisar").onclick = async () => {
+  const botao = $("an-analisar"), msgBox = $("an-msg");
+  botao.disabled = true; msgBox.style.color = "var(--mudo)"; msgBox.textContent = "Analisando e desenhando a página… (alguns segundos)";
+  try {
+    analise.dados = await api("/api/analisar-html", {html: $("an-html").value});
+    msgBox.textContent = "";
+    desenharAnalise();
+  } catch (e) { msgBox.style.color = "var(--verm)"; msgBox.textContent = e.message; }
+  botao.disabled = false;
+};
+$("an-fechar").onclick = () => $("analise").close();
+
 const AJUDA_SELETOR = "Como achar o seletor: na página, clique com o botão direito no elemento → Inspecionar → no HTML que destacou, botão direito → Copy → Copy selector. Exemplos: #enviar · button.ok · [data-testid='send']. Classes levam ponto e sem espaço: .btn.btn-primary (se você colar só o valor do atributo class, “btn btn-primary”, o Deck acerta os pontos sozinho).";
+
+function origemTexto(b, t, atualizarTitulo){
+  return campo("De onde vem o texto", opcoesSelect([["texto", "Escrevo aqui"], ["arquivo", "Importar de um arquivo"]], b.fonte || "texto", v => {
+    b.fonte = v;
+    if (v === "arquivo") {
+      b.arquivo = b.arquivo || ""; b.perguntar = b.perguntar || "nunca";
+      b.chave = b.chave || Array.from(crypto.getRandomValues(new Uint8Array(4)), x => x.toString(16).padStart(2, "0")).join("");
+    }
+    atualizarTitulo(); desenharFluxo();
+  }));
+}
+
+/* bloco Perguntar: texto, arquivo ou caminho (o resto do fluxo usa {nome} ou "Se resposta = …") */
+function pocoDeCaminhos(b){
+  const nome = b.nome, n = b.opcoes.length;
+  const marcador = (j) => ({tipo: "aviso", canal: "popup", titulo: "Caminho " + (j + 1) + ": " + (b.opcoes[j].nome || ""), texto: "Caminho " + (j + 1) + ": troque este aviso pelos blocos reais",
+    tamanho: "medio", posicao: "baixo_dir", segundos: 5});
+  const montar = (k) => {        // blocos das opções k..n-1: se = k+1 então (blocos do caminho) senão (as demais)
+    if (k === n - 1) return [marcador(k)];
+    const resto = montar(k + 1);
+    return [{tipo: "se", condicao: {tipo: "resposta", nome, valor: String(k + 1)}, negar: false, entao: 1, senao: resto.length}, marcador(k), ...resto];
+  };
+  return montar(0);
+}
+
+function montarCaminhos(b){
+  const novos = pocoDeCaminhos(b).map(x => Object.assign({_id: proximoId++, _aberto: false}, x));
+  let pos = r.fluxo.indexOf(b) + 1;
+  for (const x of novos) {      // cada bloco inserido aumenta os grupos (Se/Repetir) em que cair
+    for (const f of faixas()) if (pos >= f.ini && pos <= Math.min(f.fim, r.fluxo.length - 1)) f.b[f.campo]++;
+    r.fluxo.splice(pos++, 0, x);
+  }
+  desenharFluxo();
+}
+
+function corpoPerguntar(b, caixa, atualizarTitulo){
+  const tipo = b.tipo_pergunta;
+  caixa.append(
+    el("div", {class: "linha"},
+      el("div", {class: "cresce"}, campo("O que perguntar", opcoesSelect([["escolha", "Qual caminho seguir (1, 2, 3…)"], ["texto", "Um texto (ex.: CNPJ, número da nota)"], ["arquivo", "Um arquivo do computador"]], tipo, v => { b.tipo_pergunta = v; desenharFluxo(); }))),
+      el("div", {class: "cresce"}, campo("Guardar a resposta em {nome}", texto1(b.nome, v => { b.nome = v.toLowerCase().replace(/[^a-z0-9_]/g, ""); atualizarTitulo(); }, {maxlength: "20"})))),
+    campo("Pergunta que aparece na tela", texto1(b.titulo, v => { b.titulo = v; atualizarTitulo(); }, {placeholder: tipo === "escolha" ? "Qual caminho seguir?" : tipo === "texto" ? "Qual o CNPJ da empresa?" : "Escolha o arquivo", maxlength: "120"})));
+  if (tipo === "texto") caixa.append(campo("Texto já preenchido na caixa (opcional)", texto1(b.padrao || "", v => { b.padrao = v; }, {maxlength: "200"})));
+  if (tipo === "escolha") {
+    const lista = el("div", {class: "an-lista"});
+    b.opcoes.forEach((o, i) => {
+      const remover = el("button", {class: "btn sec mini", type: "button", title: "Remover este caminho", onclick: () => { b.opcoes.splice(i, 1); desenharFluxo(); }}, "✕");
+      remover.disabled = b.opcoes.length <= 2;
+      lista.append(el("div", {class: "an-item"},
+        el("div", {class: "an-topo"}, el("span", {class: "an-n"}, String(i + 1)),
+          texto1(o.nome, v => { o.nome = v; }, {placeholder: "Nome do caminho " + (i + 1), maxlength: "40"}), remover),
+        texto1(o.descricao || "", v => { o.descricao = v; }, {placeholder: "Prévia: o que este caminho faz (aparece embaixo do nome)", maxlength: "300"})));
+    });
+    const mais = el("button", {class: "btn sec", type: "button"}, "+ Adicionar caminho");
+    mais.disabled = b.opcoes.length >= 8;
+    mais.onclick = () => { b.opcoes.push({nome: "Caminho " + (b.opcoes.length + 1), descricao: ""}); desenharFluxo(); };
+    const montar = el("button", {class: "btn ok", type: "button"}, "⚙ Montar os caminhos logo abaixo");
+    montar.onclick = () => montarCaminhos(b);
+    caixa.append(lista, el("div", {class: "linha"}, mais, montar),
+      el("div", {class: "dica"}, "Ao apertar a tecla, aparece uma janela com estes caminhos (nome + prévia) e você escolhe um. “Montar os caminhos” cria logo abaixo uma sequência de “Se resposta = 1 … senão se resposta = 2 …” com um bloco de aviso em cada caminho: troque cada aviso pelos blocos reais daquele caminho (e ajuste “quantos blocos” de cada Se quando acrescentar blocos dentro dele)."));
+  }
+  caixa.append(campo("Quando perguntar", opcoesSelect([["sempre", "Toda vez que a tecla rodar"], ["primeira_vez", "Só na primeira vez (depois lembra a resposta)"]], b.lembrar || "sempre", v => { b.lembrar = v; desenharFluxo(); })));
+  const lembrada = cfg && cfg.respostas ? cfg.respostas[b.nome] : undefined;
+  if (b.lembrar === "primeira_vez" && lembrada !== undefined) {
+    const esquecer = el("button", {class: "btn sec mini", type: "button"}, "Esquecer e perguntar de novo");
+    esquecer.onclick = async () => { try { await api("/api/respostas", {esquecer: b.nome}); await atualizar(); desenharFluxo(); } catch (e) { msg(e.message); } };
+    caixa.append(el("div", {class: "linha"}, el("span", {class: "dica"}, "Resposta lembrada: " + curto(lembrada, 60)), esquecer));
+  }
+  caixa.append(el("div", {class: "dica"}, "Use {" + (b.nome || "nome") + "} em qualquer texto dos blocos seguintes (digitar, colar, preencher campo da página, aviso, WhatsApp…) ou use “Se / senão” com a condição “A resposta de um bloco Perguntar”. Fechar a janela cancela o fluxo."));
+}
 
 /* editor de condição (usado por "Esperar" e por "Se") */
 function editorCondicao(c, atualizarTitulo){
   const caixa = el("div", {class: "cond"});
-  const tipo = opcoesSelect([["janela", "Uma janela do Windows"], ["pixel", "A cor de um ponto da tela"], ["pagina", "Algo na página web (navegador do Deck)"]], c.tipo, (v) => {
+  const tipo = opcoesSelect([["janela", "Uma janela do Windows"], ["pixel", "A cor de um ponto da tela"], ["pagina", "Algo na página web (navegador do Deck)"], ["resposta", "A resposta de um bloco Perguntar"]], c.tipo, (v) => {
     for (const k of Object.keys(c)) delete c[k];
     Object.assign(c, CONDICAO_PADRAO[v]()); desenharFluxo();
   });
@@ -655,6 +824,18 @@ function editorCondicao(c, atualizarTitulo){
     caixa.append(
       campo("Parte do título da janela", texto1(c.texto, v => { c.texto = v; atualizarTitulo(); }, {placeholder: "Ex.: Excel, Bloco de Notas, Google Chrome"})),
       campo("Considerar", opcoesSelect([["ativa", "a janela que está em primeiro plano"], ["existe", "qualquer janela aberta"]], c.modo, v => { c.modo = v; atualizarTitulo(); })));
+  } else if (c.tipo === "resposta") {
+    const perguntas = r.fluxo.filter(x => x.tipo === "perguntar");
+    const origem = perguntas.find(x => x.nome === c.nome);
+    const valor = origem && origem.tipo_pergunta === "escolha"
+      ? opcoesSelect(origem.opcoes.map((o, i) => [String(i + 1), (i + 1) + " — " + (o.nome || "caminho " + (i + 1))]), c.valor, v => { c.valor = v; atualizarTitulo(); })
+      : texto1(c.valor, v => { c.valor = v; atualizarTitulo(); }, {placeholder: "Valor esperado"});
+    if (origem && origem.tipo_pergunta === "escolha" && !origem.opcoes.some((_, i) => String(i + 1) === c.valor)) c.valor = "1";
+    const nome = perguntas.length
+      ? opcoesSelect([...new Set([...perguntas.map(x => x.nome), c.nome])].map(n => [n, "{" + n + "}"]), c.nome, v => { c.nome = v; desenharFluxo(); })
+      : texto1(c.nome, v => { c.nome = v.toLowerCase(); atualizarTitulo(); }, {placeholder: "nome da resposta"});
+    caixa.append(el("div", {class: "linha"}, el("div", {class: "cresce"}, campo("Resposta de", nome)), el("div", {class: "cresce"}, campo("é igual a", valor))),
+      el("div", {class: "dica"}, perguntas.length ? "Vale a resposta dada no bloco “Perguntar” acima deste (ou lembrada de outra execução)." : "Adicione antes um bloco “Perguntar” com esse nome."));
   } else if (c.tipo === "pixel") {
     const amostra = el("span", {class: "amostra"}); amostra.style.background = c.cor;
     const marcar = el("button", {class: "btn", type: "button"}, "◎ Marcar ponto e cor na tela");
@@ -673,11 +854,13 @@ function editorCondicao(c, atualizarTitulo){
         el("div", {class: "cresce"}, campo("Tolerância (0 a 255)", numero(c.tolerancia, v => { c.tolerancia = v; }, {min: "0", max: "255"})))),
       el("div", {class: "dica"}, "Boa para botões que mudam de cor (cinza → verde) ou telas de carregamento. Quanto maior a tolerância, mais parecida a cor pode ser."));
   } else {
+    const entradaValor = texto1(c.valor, v => { c.valor = v; atualizarTitulo(); }, {placeholder: c.alvo === "seletor" ? "#enviar  ·  button.ok  ·  [aria-label='Enviar']" : "Mensagem enviada"});
     caixa.append(
       el("div", {class: "linha"},
         el("div", {class: "cresce"}, campo("Procurar", opcoesSelect([["seletor", "um elemento do HTML (seletor CSS)"], ["texto", "um texto na página"]], c.alvo, v => { c.alvo = v; desenharFluxo(); }))),
         el("div", {class: "cresce"}, campo("Só na aba cujo endereço/título contém (opcional)", texto1(c.aba, v => { c.aba = v; }, {placeholder: "Ex.: whatsapp"})))),
-      campo(c.alvo === "seletor" ? "Seletor do elemento" : "Texto a procurar", texto1(c.valor, v => { c.valor = v; atualizarTitulo(); }, {placeholder: c.alvo === "seletor" ? "#enviar  ·  button.ok  ·  [aria-label='Enviar']" : "Mensagem enviada"})),
+      campo(c.alvo === "seletor" ? "Seletor do elemento" : "Texto a procurar", entradaValor),
+      c.alvo === "seletor" ? botaoAnalise(entradaValor, v => { c.valor = v; atualizarTitulo(); }, "todos") : el("span"),
       el("div", {class: "dica"}, "Vale para páginas abertas no navegador do Deck: use o bloco “Abrir site” marcando “no navegador do Deck”. " + (c.alvo === "seletor" ? AJUDA_SELETOR : "")));
   }
   return caixa;
@@ -712,7 +895,23 @@ function corpo(b, titulo){
     };
     const cancelar = el("button", {class: "btn sec", type: "button", onclick: () => api("/api/cancelar", {})}, "Cancelar gravação");
     caixa.append(el("div", {}, "Comando: ", valor), el("div", {class: "linha"}, gravar, cancelar), dica);
+  } else if ((t === "texto" || t === "colar") && b.fonte === "arquivo") {
+    caixa.append(origemTexto(b, t, atualizarTitulo));
+    const entrada = texto1(b.arquivo || "", v => { b.arquivo = v; atualizarTitulo(); }, {placeholder: "C:\\Clientes\\texto.txt  (pode usar {variáveis} no caminho)"});
+    const procurar = el("button", {class: "btn sec", type: "button"}, "Procurar arquivo…");
+    procurar.onclick = async () => { try { const res = await api("/api/escolher-arquivo", {texto: true}); b.arquivo = res.caminho; entrada.value = res.caminho; atualizarTitulo(); msg(""); } catch (e) { msg(e.message); } };
+    const quando = b.perguntar || "nunca";
+    caixa.append(campo("De onde importar", opcoesSelect([["nunca", "Sempre deste arquivo (caminho fixo)"], ["primeira_vez", "Perguntar o arquivo na primeira vez e lembrar"], ["sempre", "Perguntar o arquivo toda vez que rodar"]], quando, v => { b.perguntar = v; desenharFluxo(); })));
+    if (quando === "nunca") caixa.append(campo("Arquivo de texto", entrada), el("div", {class: "linha"}, procurar));
+    else {
+      const lembrado = cfg && cfg.respostas ? cfg.respostas["arq_" + b.chave] : "";
+      caixa.append(el("div", {class: "dica"}, quando === "primeira_vez"
+        ? (lembrado ? "Arquivo lembrado: " + lembrado + ". Para trocar, vá em Opções → Respostas lembradas → Esquecer." : "Na primeira execução abre a janela para você escolher o arquivo; nas outras usa o mesmo (se ele sumir, pergunta de novo).")
+        : "Toda vez que a tecla rodar, abre a janela para você escolher o arquivo."));
+    }
+    caixa.append(el("div", {class: "dica"}, "O texto do arquivo é " + (t === "texto" ? "digitado tecla por tecla (até 20 mil letras)" : "colado com Ctrl + V (até 200 mil letras)") + ". Aceita arquivos .txt em UTF-8 ou ANSI."));
   } else if (t === "texto" || t === "colar") {
+    caixa.append(origemTexto(b, t, atualizarTitulo));
     const area = el("textarea", {maxlength: t === "texto" ? "2000" : "5000", placeholder: "Pode usar {contador}, {data} e {hora}"});
     area.value = b.texto; area.oninput = () => { b.texto = area.value; atualizarTitulo(); };
     caixa.append(campo(t === "texto" ? "Texto a digitar (tecla por tecla)" : "Texto a colar (vai para a área de transferência e aperta Ctrl + V)", area),
@@ -767,6 +966,8 @@ function corpo(b, titulo){
       el("div", {class: "cresce"}, campo("Operação", opcoesSelect([["somar", "somar"], ["definir", "definir o valor"], ["zerar", "zerar"]], b.operacao, v => { b.operacao = v; desenharFluxo(); }))));
     if (b.operacao !== "zerar") linha.append(el("div", {class: "cresce"}, campo(b.operacao === "somar" ? "Somar quanto?" : "Valor", numero(b.valor, v => { b.valor = v; atualizarTitulo(); }))));
     caixa.append(linha, agora, el("div", {class: "dica"}, "Use {" + b.nome + "} em qualquer texto dos outros blocos (digitar, colar, aviso, site, comando, WhatsApp…). O valor fica guardado mesmo depois de fechar o programa. {data} e {hora} também funcionam."));
+  } else if (t === "perguntar") {
+    corpoPerguntar(b, caixa, atualizarTitulo);
   } else if (t === "abrir") {
     const caminho = texto1(b.caminho, v => { b.caminho = v; atualizarTitulo(); }, {placeholder: "C:\\Programas\\app.exe, meu_script.py, uma pasta ou só chrome"});
     const args = texto1(b.argumentos, v => { b.argumentos = v; atualizarTitulo(); }, {placeholder: "Opcional. Ex.: https://www.google.com"});
@@ -783,9 +984,15 @@ function corpo(b, titulo){
     caixa.append(campo("Programa, arquivo ou pasta", caminho), el("div", {class: "linha"}, procurar, pasta), campo("Argumentos (opcional)", args),
       el("div", {class: "dica"}, "Scripts .py rodam com o Python instalado. Pastas abrem no Explorer. Para abrir o Chrome numa página: programa “chrome” e argumento com o endereço."));
   } else if (t === "site") {
-    caixa.append(campo("Endereço do site", texto1(b.url, v => { b.url = v; atualizarTitulo(); }, {placeholder: "google.com"})),
-      marcaCaixa("Abrir no navegador do Deck (necessário para esperar/clicar elementos da página)", b.controlado, v => { b.controlado = v; atualizarTitulo(); }),
-      el("div", {class: "dica"}, "Sem a marcação, abre no navegador padrão do Windows. O navegador do Deck é um Chrome/Edge com perfil próprio: entre nas suas contas nele uma vez e o login fica guardado."));
+    const atual = b.controlado && b.destino === "atual";
+    caixa.append(campo(atual ? "Ir para este endereço na página atual (opcional)" : "Endereço do site", texto1(b.url, v => { b.url = v; atualizarTitulo(); }, {placeholder: atual ? "Deixe vazio para só usar a página que já está aberta" : "google.com"})),
+      marcaCaixa("Abrir no navegador do Deck (necessário para esperar/clicar elementos da página)", b.controlado, v => { b.controlado = v; atualizarTitulo(); desenharFluxo(); }));
+    if (b.controlado) {
+      caixa.append(campo("Onde abrir", opcoesSelect([["nova", "Em uma aba nova"], ["atual", "Usar a página atual (a aba que já está aberta no navegador do Deck)"]], b.destino || "nova", v => { b.destino = v; atualizarTitulo(); desenharFluxo(); })));
+      if (!atual) caixa.append(marcaCaixa("Abrir em segundo plano (a aba nova não passa na frente da que você está usando)", b.segundo_plano, v => { b.segundo_plano = v; }));
+    }
+    caixa.append(
+      el("div", {class: "dica"}, "Sem a marcação, abre no navegador padrão do Windows. O navegador do Deck é um Chrome/Edge com perfil próprio: entre nas suas contas nele uma vez e o login fica guardado. Os blocos de clicar/preencher na página agem direto no navegador, sem mexer no mouse: com “usar a página atual” ou “segundo plano” você segue trabalhando em outra janela enquanto o Deck faz o serviço."));
   } else if (t === "comando") {
     const area = el("textarea", {maxlength: "1000", placeholder: "Ex.: Get-Date | Out-File C:\\\\log.txt"});
     area.value = b.comando; area.oninput = () => { b.comando = area.value; atualizarTitulo(); };
@@ -801,7 +1008,9 @@ function corpo(b, titulo){
       marcaCaixa("Abrir no navegador do Deck", b.controlado, v => { b.controlado = v; }),
       el("div", {class: "dica"}, "Abre a conversa com a mensagem já escrita. Quem envia é você (Enter). Para enviar sozinho: marque “navegador do Deck” e adicione depois um bloco “Esperar” (elemento do botão enviar) e “Clicar na página web”."));
   } else if (t === "web_clicar" || t === "web_preencher") {
-    caixa.append(campo("Seletor do elemento", texto1(b.seletor, v => { b.seletor = v; atualizarTitulo(); }, {placeholder: "#enviar  ·  button.ok  ·  [aria-label='Enviar']"})));
+    const entradaSel = texto1(b.seletor, v => { b.seletor = v; atualizarTitulo(); }, {placeholder: "#enviar  ·  button.ok  ·  [aria-label='Enviar']"});
+    caixa.append(campo("Seletor do elemento", entradaSel),
+      botaoAnalise(entradaSel, v => { b.seletor = v; atualizarTitulo(); }, t === "web_clicar" ? "clicar" : "preencher"));
     if (t === "web_preencher") {
       const area = el("textarea", {maxlength: "2000", placeholder: "Texto do campo (pode usar {contador}, {data}, {hora})"});
       area.value = b.texto; area.oninput = () => { b.texto = area.value; };
@@ -944,6 +1153,27 @@ async function estadoEvolution(alvo){
   } catch (_) { alvo.textContent = ""; }
 }
 
+function secaoZapDoTexto(b, caixa, atualizarTitulo){
+  const abrir = marcaCaixa("Abrir o texto no Bloco de Notas", b.abrir !== false, v => { b.abrir = v; });
+  const zapLigado = marcaCaixa("Enviar o conteúdo do texto por WhatsApp", !!b.whatsapp, v => {
+    b.whatsapp = v ? {numero: "", modo: "link", espera: 10} : null; desenharFluxo();
+  });
+  caixa.append(el("div", {class: "dica"}, "Depois de gerar o texto, o Deck pode abrir no Bloco de Notas, mandar por WhatsApp, ou os dois."), abrir, zapLigado);
+  if (!b.whatsapp) return;
+  const z = b.whatsapp;
+  caixa.append(
+    campo("Enviar para o número (com DDI e DDD, ex.: 5577991831413)", texto1(z.numero, v => { z.numero = v; atualizarTitulo(); }, {placeholder: "5577991831413", inputmode: "numeric"})),
+    campo("Como enviar", opcoesSelect([["link", "Abrir o link do WhatsApp (wa.me) e apertar Enter"], ["evolution", "Pela Evolution API (sem abrir nada na tela)"]], z.modo || "link", v => { z.modo = v; desenharFluxo(); })));
+  if (z.modo === "evolution") {
+    const estado = el("div", {class: "evo-estado"});
+    estadoEvolution(estado);
+    caixa.append(estado);
+  } else {
+    caixa.append(campo("Esperar o WhatsApp abrir antes de apertar Enter (segundos)", numero(z.espera, v => { z.espera = v; }, {min: "1", max: "120"})));
+  }
+  caixa.append(el("div", {class: "dica"}, "A mensagem é o texto do arquivo. Pelo link cabem cerca de 1200 letras; pela Evolution API, cerca de 3800. O que passar disso é cortado, com um aviso no fim."));
+}
+
 function corpoAviso(b, caixa, atualizarTitulo){
   caixa.append(campo("Como avisar", opcoesSelect([["popup", "Pop-up na tela"], ["whatsapp", "Mensagem no WhatsApp"], ["bloco_notas", "Bloco de Notas (abrir um TXT ou a saída de um programa)"]], b.canal || "popup", (v) => {
     const id = b._id, ab = b._aberto;
@@ -989,6 +1219,7 @@ function corpoAviso(b, caixa, atualizarTitulo){
         campo("Pasta do TXT (opcional)", pasta), el("div", {class: "linha"}, escolherPasta),
         el("div", {class: "dica"}, "Tudo que o programa escrever na tela (print, erros) vai para o TXT, que abre no Bloco de Notas quando ele terminar. Sem pasta, o TXT fica ao lado do script (ou em “saidas”, na pasta de dados do Deck). O fluxo espera o programa terminar."));
     }
+    secaoZapDoTexto(b, caixa, atualizarTitulo);
   } else {
     const rotulos = Object.entries(TAMANHOS_AVISO);
     const tamanhos = el("div", {class: "tamanhos"});
@@ -1146,7 +1377,19 @@ async function montarEvolution(){
     el("div", {class: "linha"}, el("div", {class: "cresce"}, numeroTeste), testar), estado);
 }
 
-$("abrir-opcoes").onclick = () => { montarEvolution(); $("opcoes").showModal(); };
+function desenharRespostas(){
+  const caixa = $("respostas");
+  caixa.replaceChildren(el("strong", {}, "Respostas lembradas"));
+  const itens = Object.entries(cfg.respostas || {});
+  if (!itens.length) { caixa.append(el("div", {class: "dica"}, "Nenhuma ainda. Aparecem aqui as respostas dos blocos “Perguntar” e os arquivos escolhidos na primeira vez.")); return; }
+  for (const [nome, valor] of itens) {
+    const esquecer = el("button", {class: "btn sec mini", type: "button", onclick: async () => {
+      try { await api("/api/respostas", {esquecer: nome}); await atualizar(); desenharRespostas(); } catch (e) { alert(e.message); }
+    }}, "Esquecer");
+    caixa.append(el("div", {class: "an-topo"}, el("code", {}, nome.startsWith("arq_") ? "arquivo de um bloco de texto" : "{" + nome + "}"), el("span", {class: "dica", style: "overflow-wrap:anywhere"}, curto(valor, 70)), esquecer));
+  }
+}
+$("abrir-opcoes").onclick = () => { montarEvolution(); desenharRespostas(); $("opcoes").showModal(); };
 $("op-fechar").onclick = () => $("opcoes").close();
 $("encerrar").onclick = async () => {
   if (!confirm("Encerrar o Numpad Deck? As teclas voltam ao normal.")) return;

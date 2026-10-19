@@ -107,6 +107,27 @@ class Segredos:
 
 
 # ---------------------------------------------------------------- WhatsApp por link (wa.me) + Enter
+LIMITE_ZAP = {"link": 1200, "evolution": 3800}   # o link wa.me aceita pouco texto; a API aceita bem mais
+
+
+def ler_texto_para_whatsapp(arquivo, modo: str = "link") -> str:
+    """Conteúdo do TXT pronto para virar mensagem (corta se passar do limite do modo de envio)."""
+    bruto = Path(arquivo).read_bytes()
+    for codec in ("utf-8-sig", "cp1252"):
+        try:
+            texto = bruto.decode(codec)
+            break
+        except UnicodeDecodeError:
+            continue
+    texto = texto.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not texto:
+        return "(sem conteúdo)"
+    limite = LIMITE_ZAP.get(modo, 1200)
+    if len(texto) > limite:
+        texto = texto[:limite].rstrip() + "\n… (texto cortado; o arquivo completo ficou no computador)"
+    return texto
+
+
 def link_whatsapp(numero: str, texto: str) -> str:
     """https://wa.me/<número>?text=<mensagem codificada>: abre a conversa com a mensagem já digitada."""
     return f"https://wa.me/{numero}?text={urllib.parse.quote(texto, safe='')}"

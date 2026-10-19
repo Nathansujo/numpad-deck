@@ -139,6 +139,73 @@ class PlataformaComNavegador(PlataformaFalsa):
 
 
 @unittest.skipUnless(TEM_WS and achar_navegador(), "sem Chrome/Chromium ou websocket-client")
+class AbasNovaEAtual(unittest.TestCase):
+    def test_pagina_atual_nova_e_segundo_plano(self):
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+        tmp = tempfile.mkdtemp()
+        nav = Navegador(Path(tmp) / "perfil", porta=porta_livre(), args_extra=("--headless=new", "--no-sandbox", "--disable-gpu"))
+        try:
+            nav.abrir(base + "/primeira")
+            fim = time.monotonic() + 15
+            while time.monotonic() < fim and not nav.disponivel():
+                time.sleep(0.2)
+            abas = lambda: [a["url"] for a in nav._abas()]
+            fim = time.monotonic() + 10
+            while time.monotonic() < fim and not any("/primeira" in u for u in abas()):
+                time.sleep(0.2)
+            self.assertEqual(len(abas()), 1)
+            nav.abrir("", "atual")                                  # sem endereço: não abre nada
+            self.assertEqual(len(abas()), 1)
+            nav.abrir(base + "/segunda", "atual")                   # vai para outro endereço na MESMA aba
+            fim = time.monotonic() + 10
+            while time.monotonic() < fim and not any("/segunda" in u for u in abas()):
+                time.sleep(0.2)
+            self.assertEqual([u.rsplit("/", 1)[1] for u in abas()], ["segunda"])
+            nav.abrir(base + "/terceira", segundo_plano=True)       # aba nova, sem passar na frente
+            fim = time.monotonic() + 10
+            while time.monotonic() < fim and len(abas()) < 2:
+                time.sleep(0.2)
+            self.assertEqual(sorted(u.rsplit("/", 1)[1] for u in abas()), ["segunda", "terceira"])
+            nav.abrir(base + "/quarta")                             # padrão: outra aba nova
+            fim = time.monotonic() + 10
+            while time.monotonic() < fim and len(abas()) < 3:
+                time.sleep(0.2)
+            self.assertEqual(len(abas()), 3)
+        finally:
+            import subprocess
+            subprocess.run(["pkill", "-f", tmp], check=False)
+            srv.shutdown()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_pagina_atual_sem_navegador_aberto_explica(self):
+        nav = Navegador(Path(tempfile.mkdtemp()) / "perfil", porta=porta_livre())
+        with self.assertRaisesRegex(ErroNavegador, "não está aberto"):
+            nav.abrir("", "atual")
+
+
+@unittest.skipUnless(TEM_WS and achar_navegador(), "sem Chrome/Chromium ou websocket-client")
+class FotoDoHtml(unittest.TestCase):
+    def test_desenha_sem_executar_e_mede_os_elementos(self):
+        import analisehtml
+        from navegador import fotografar_html
+        html = ('<style>button{padding:10px}</style><input id="u" placeholder="Usuário"><button id="ok" onclick="document.title=1">Entrar</button>'
+                '<script>document.body.insertAdjacentHTML("beforeend","<button id=js>js</button>")</script>')
+        achado = analisehtml.analisar(html)
+        sels = [e["seletor"] for e in achado["elementos"]] + ["#js", "#nao-existe"]
+        f = fotografar_html(analisehtml.higienizar(html), sels, args_extra=("--no-sandbox",))
+        self.assertEqual(f["png"][:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(f["retangulos"]["#u"]["achados"], 1)
+        self.assertGreater(f["retangulos"]["#ok"]["w"], 40)
+        self.assertEqual(f["retangulos"]["#js"]["achados"], 0)           # o script da página não rodou
+        self.assertEqual(f["retangulos"]["#nao-existe"]["achados"], 0)
+        for e in achado["elementos"]:
+            e["rect"] = f["retangulos"][e["seletor"]]
+        self.assertTrue(analisehtml.marcar_imagem(f["png"], achado["elementos"]).startswith("data:image/jpeg"))
+
+
+@unittest.skipUnless(TEM_WS and achar_navegador(), "sem Chrome/Chromium ou websocket-client")
 class FluxoComNavegadorReal(unittest.TestCase):
     """O fluxo inteiro: abre o site, ESPERA o elemento aparecer (sem pausa fixa), preenche, clica e decide com Se."""
 
